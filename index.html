@@ -1,0 +1,1368 @@
+<title>US Apartment Rent Estimator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: listing form on the left, a sticky "appraisal slip" on the right; stacks to one column on phones */
+:root {
+  --bg: #f3f6f9;
+  --surface: #ffffff;
+  --ink: #14263a;
+  --muted: #5a6b7d;
+  --line: #d6dfe8;
+  --accent: #1f4e79;
+  --accent-soft: #dce9f5;
+  --band: #5b9bd5;
+  --warn-bg: #fdf3dc;
+  --warn-ink: #7a5300;
+  --good: #1d6b3a;
+  --good-bg: #dcf1e3;
+  --bad: #9b2c22;
+  --bad-bg: #fbe1dd;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1620; --surface: #16212d; --ink: #e4ecf4; --muted: #95a6b8; --line: #2a3a4b;
+    --accent: #8cbfe8; --accent-soft: #1d3247; --band: #4a86bd; --warn-bg: #3a2e14; --warn-ink: #f1cf86;
+    --good: #8fd6a6; --good-bg: #173524; --bad: #f2a69c; --bad-bg: #3d1c19;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1620; --surface: #16212d; --ink: #e4ecf4; --muted: #95a6b8; --line: #2a3a4b;
+  --accent: #8cbfe8; --accent-soft: #1d3247; --band: #4a86bd; --warn-bg: #3a2e14; --warn-ink: #f1cf86;
+  --good: #8fd6a6; --good-bg: #173524; --bad: #f2a69c; --bad-bg: #3d1c19;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+}
+.wrap {
+  max-width: 1120px; margin: 0 auto;
+  padding-block: 32px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 28px;
+}
+header { display: grid; gap: 6px; max-width: 68ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+form { display: grid; gap: 24px; min-width: 0; }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
+legend { font-family: var(--font-display); font-weight: 500; font-size: 18px; padding: 0; margin-bottom: 10px; }
+.legend-note { font-family: var(--font-body); font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+.field { display: grid; gap: 5px; min-width: 0; }
+label, .label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.col { font-family: var(--font-mono); font-size: 11px; color: var(--muted); opacity: .8; }
+input[type="text"], input[type="number"], select {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; width: 100%;
+}
+input:focus-visible, select:focus-visible, .chip input:focus-visible + span {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.hint { font-size: 12.5px; color: var(--muted); min-height: 1em; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.chip span {
+  display: inline-block; padding: 6px 11px; border-radius: 999px; font-size: 13.5px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.chip input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.chip-actions { display: flex; gap: 14px; font-size: 13px; }
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+.paste-box { background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; }
+.paste-box legend { float: left; width: 100%; margin-bottom: 0; }
+textarea {
+  font: inherit; font-size: 13.5px; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; width: 100%;
+  min-height: 92px; resize: vertical;
+}
+textarea:focus-visible, .btn:focus-visible, .unit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.paste-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn {
+  font: inherit; font-weight: 500; font-size: 14px; border: 0; border-radius: 6px; padding: 8px 14px;
+  background: var(--accent); color: var(--surface); cursor: pointer;
+}
+.found { font-size: 13px; color: var(--muted); display: grid; gap: 8px; }
+.found strong { color: var(--ink); font-weight: 600; }
+.units { display: flex; flex-wrap: wrap; gap: 8px; }
+.unit {
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: 6px; padding: 6px 10px; font-variant-numeric: tabular-nums;
+}
+.unit[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.unit small { display: block; color: var(--muted); font-size: 12px; }
+
+.slip {
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 22px; display: grid; gap: 18px; min-width: 0;
+}
+@media (max-width: 860px) { .slip { position: static; } }
+.slip-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.where { font-size: 13.5px; color: var(--muted); }
+.estimate { font-family: var(--font-display); font-weight: 700; font-size: clamp(40px, 6vw, 56px); line-height: 1; font-variant-numeric: tabular-nums; }
+.estimate small { font-family: var(--font-body); font-size: 15px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.range { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.range strong { color: var(--ink); font-weight: 600; }
+.est-block { display: grid; gap: 6px; }
+.figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 4px; }
+.figure { display: grid; gap: 6px; justify-items: start; align-content: start; min-width: 0; }
+.listed-fig { border-left: 1px solid var(--line); padding-left: 20px; }
+.figures .estimate { font-size: clamp(30px, 4.2vw, 42px); }
+.figures .estimate small { display: block; margin: 4px 0 0; font-size: 13px; }
+.fig-label { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sw.tri { width: 0; height: 0; border-radius: 0; opacity: 1; background: none; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--warn-ink); }
+.adjust { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; border-left: 2px solid var(--line); padding-left: 10px; }
+.adjust strong { color: var(--ink); font-weight: 600; }
+
+.bandchart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.bandchart text { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+.legend-row { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 8px; border-radius: 2px; background: var(--band); opacity: .45; }
+.sw.dot { width: 10px; height: 10px; border-radius: 50%; opacity: 1; background: var(--accent); }
+.sw.tick { width: 2px; height: 12px; border-radius: 0; opacity: 1; background: var(--ink); }
+.compare { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
+.compare strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.stats div { border-top: 1px solid var(--line); padding-top: 8px; }
+.stats dt { font-size: 12.5px; color: var(--muted); }
+.stats dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+
+.notes { display: grid; gap: 8px; }
+.note { background: var(--warn-bg); color: var(--warn-ink); border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+
+.deal { display: grid; gap: 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.verdict-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px; }
+.verdict { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.verdict.good { background: var(--good-bg); color: var(--good); }
+.verdict.fair { background: var(--accent-soft); color: var(--accent); }
+.verdict.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.verdict.bad { background: var(--bad-bg); color: var(--bad); }
+.verdict-text { color: var(--ink); }
+.deal-list h3 { font-family: var(--font-display); font-weight: 500; font-size: 15px; margin: 0 0 6px; }
+.deal-list ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; }
+.deal-list li strong { font-variant-numeric: tabular-nums; }
+.deal-list li.none { list-style: none; margin-left: -18px; color: var(--muted); }
+#neg li::marker { color: var(--warn-ink); }
+#pros li::marker { color: var(--good); }
+.counter { margin: 0; font-size: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.counter strong { font-variant-numeric: tabular-nums; }
+.fine { margin: 0; font-size: 12px; color: var(--muted); }
+.alert { background: var(--bad-bg); color: var(--bad); border-radius: 6px; padding: 10px 12px; font-size: 13px; }
+.pct h3, .unseen h3, .trend h3 { font-family: var(--font-display); font-weight: 500; font-size: 15px; margin: 0 0 6px; }
+.pct svg, .trend svg { width: 100%; height: auto; display: block; overflow: visible; }
+.pct svg text, .trend svg text { font-family: var(--font-mono); font-size: 10.5px; fill: var(--muted); }
+.pct-text, .trend-text { margin: 6px 0 0; font-size: 13.5px; }
+.pct-text strong, .trend-text strong { font-variant-numeric: tabular-nums; }
+.unseen p { margin: 0; font-size: 13px; color: var(--muted); }
+.copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.copy-status { font-size: 13px; color: var(--good); }
+.fee-list { display: grid; gap: 12px; }
+.fee-group h4 { margin: 0 0 4px; font-size: 12px; font-family: var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.fee-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.fee-row select { font-size: 12.5px; padding: 4px 6px; width: auto; }
+.fee-name small { display: block; color: var(--warn-ink); font-size: 12px; }
+.fee-amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 560px) { .fee-row { grid-template-columns: minmax(0, 1fr) auto; } .fee-row select { grid-column: span 1; } }
+.fee-count { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 13.5px; color: var(--muted); }
+.fee-count label { display: inline-flex; gap: 6px; align-items: center; color: var(--ink); font-weight: 400; font-size: 13.5px; }
+.fee-fixed { color: var(--ink); }
+.fee-manual summary { cursor: pointer; font-size: 13.5px; color: var(--accent); }
+.fee-manual .row { margin: 10px 0; }
+.summary-box { display: grid; gap: 8px; }
+#summary-text { min-height: 180px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; background: var(--surface); }
+.pct svg text.row-label { font-family: var(--font-body); font-size: 12.5px; fill: var(--ink); font-weight: 500; }
+.pct svg text.listed-label { font-family: var(--font-body); font-size: 12px; fill: var(--warn-ink); font-weight: 600; }
+.model-details { border-top: 1px solid var(--line); padding-top: 12px; }
+.model-details .stats { margin-top: 12px; }
+.costs { display: grid; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.cost-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; }
+.cost-row strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cost-row strong small { font-weight: 400; color: var(--muted); }
+.cost-note { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+details { border-top: 1px solid var(--line); padding-top: 14px; font-size: 13.5px; color: var(--muted); }
+summary { cursor: pointer; color: var(--ink); font-weight: 500; }
+details p, details ul { margin: 10px 0 0; max-width: 72ch; }
+details ul { padding-left: 18px; display: grid; gap: 4px; }
+.seg-table-wrap { overflow-x: auto; margin-top: 10px; }
+table { border-collapse: collapse; font-size: 13px; min-width: 520px; }
+th, td { text-align: left; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); }
+th { color: var(--ink); font-weight: 600; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+code { font-family: var(--font-mono); font-size: 12.5px; }
+.footer { display: grid; gap: 14px; }
+.error { color: var(--warn-ink); background: var(--warn-bg); padding: 12px; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Trained on 2018–2019 listings · adjusted with BLS rent indexes</span>
+    <h1>US Apartment Rent Estimator</h1>
+    <p>Describe a rental apartment anywhere in the US and get the monthly asking rent our random forest expects, brought up to date with the BLS rent index for its region. The form starts with an example listing in Austin, TX.</p>
+  </header>
+
+  <div id="load-error" class="error" hidden>A model file did not load, so estimates can't be calculated. Reload the page to try again. If it keeps failing, check that <code>model.json</code> and the <code>rf_*.txt</code> files are published next to this page.</div>
+
+  <div class="grid">
+    <form id="f" autocomplete="off">
+      <fieldset class="paste-box">
+        <legend>Fill from a listing <span class="legend-note">optional</span></legend>
+        <label for="paste">Open the listing page, select everything (Cmd+A or Ctrl+A), copy it and paste it here. The form below fills in automatically, and you can still change any field. For fees split into tabs, paste each tab here too; a new paste replaces the text and adds to what's already filled in.</label>
+        <textarea id="paste" placeholder="Paste the listing page text here"></textarea>
+        <div class="paste-actions">
+          <button type="button" class="btn" id="parse-btn">Fill form from text</button>
+          <button type="button" class="linkbtn" id="paste-clear">Clear text</button>
+        </div>
+        <div id="found" class="found" hidden></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Location</legend>
+        <div class="row">
+          <div class="field">
+            <label for="state">State <span class="col">state</span></label>
+            <select id="state"></select>
+          </div>
+          <div class="field">
+            <label for="city">City <span class="legend-note">for reference</span></label>
+            <input id="city" type="text" list="city-list" placeholder="Start typing a city">
+            <datalist id="city-list"></datalist>
+          </div>
+        </div>
+        <div class="hint">The model places a listing by its state and that state's market segment. The city is shown on the estimate but doesn't change it.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Unit</legend>
+        <div class="row">
+          <div class="field">
+            <label for="sqft">Size, sq ft <span class="col">square_feet</span></label>
+            <input id="sqft" type="number" min="100" max="12000" step="10" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label for="beds">Bedrooms <span class="col">bedrooms</span></label>
+            <select id="beds">
+              <option value="0">Studio</option><option value="1">1</option><option value="2">2</option>
+              <option value="3">3</option><option value="4">4</option><option value="5">5</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="baths">Bathrooms <span class="col">bathrooms</span></label>
+            <select id="baths">
+              <option>1</option><option>1.5</option><option>2</option><option>2.5</option>
+              <option>3</option><option>3.5</option><option>4</option>
+            </select>
+          </div>
+        </div>
+        <div id="size-hint" class="hint"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Asking price</legend>
+        <div class="row">
+          <div class="field">
+            <label for="listed-in">Listed rent, $ per month</label>
+            <input id="listed-in" type="number" min="0" step="10" inputmode="numeric" placeholder="e.g. 1650">
+          </div>
+          <div class="field">
+            <label for="days-in">Days on market</label>
+            <input id="days-in" type="number" min="0" step="1" inputmode="numeric" placeholder="optional">
+          </div>
+        </div>
+        <div class="hint">Enter the rent shown on the listing to see whether the unit is worth it and where to negotiate.</div>
+        <div class="row">
+          <div class="field">
+            <label for="free-in">Free weeks</label>
+            <input id="free-in" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+          </div>
+          <div class="field">
+            <label for="discount-in">One-time discount, $</label>
+            <input id="discount-in" type="number" min="0" step="10" inputmode="numeric" placeholder="0">
+          </div>
+          <div class="field">
+            <label for="lease-in">Lease length, months</label>
+            <input id="lease-in" type="number" min="1" step="1" inputmode="numeric" value="12">
+          </div>
+        </div>
+        <div class="hint">Move-in specials are optional. They lower the rent used for the verdict.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Fees <span class="legend-note">optional</span></legend>
+        <p class="hint" id="fees-empty">Paste the listing's fee section in the box at the top. If the site splits fees into tabs such as Required, Pets and Parking, paste each tab once and the fees add up here.</p>
+        <div id="fee-list" class="fee-list"></div>
+        <div class="fee-count">
+          <span>Count in the total:</span>
+          <span class="fee-fixed">Required always</span>
+          <label><input type="checkbox" id="count-pets"> Pets</label>
+          <label><input type="checkbox" id="count-parking"> Parking</label>
+          <label><input type="checkbox" id="count-addons"> Add-ons</label>
+        </div>
+        <details class="fee-manual">
+          <summary>Add a fee by hand</summary>
+          <div class="row">
+            <div class="field"><label for="fee-name">Fee</label><input id="fee-name" type="text" placeholder="e.g. Amenity fee"></div>
+            <div class="field"><label for="fee-amount">Amount, $</label><input id="fee-amount" type="number" min="0" step="1" inputmode="decimal"></div>
+            <div class="field"><label for="fee-kind">Paid</label><select id="fee-kind"></select></div>
+            <div class="field"><label for="fee-group">Category</label><select id="fee-group"></select></div>
+          </div>
+          <button type="button" class="btn" id="fee-add">Add fee</button>
+        </details>
+      </fieldset>
+
+
+      <fieldset>
+        <legend>Amenities <span class="legend-note">amenities</span></legend>
+        <div id="chips" class="chips"></div>
+        <div class="chip-actions">
+          <button type="button" class="linkbtn" id="clear-am">Clear all</button>
+        </div>
+      </fieldset>
+    </form>
+
+    <aside class="slip" aria-live="polite">
+      <div class="slip-head">
+        <span class="eyebrow" id="est-label">Estimated asking rent</span>
+        <span class="where" id="where"></span>
+      </div>
+      <div class="est-block">
+        <div class="figures">
+          <div class="figure">
+            <span class="fig-label">Estimate</span>
+            <div class="estimate" id="est">–<small>/ month</small></div>
+            <div class="range" id="range"></div>
+          </div>
+          <div class="figure listed-fig" id="listed-fig" hidden>
+            <span class="fig-label">Listed</span>
+            <div class="estimate" id="listed-num"></div>
+            <span class="verdict" id="listed-gap"></span>
+          </div>
+        </div>
+        <div class="costs" id="costs" hidden></div>
+        <div class="adjust" id="adjust"></div>
+      </div>
+      <section class="deal" aria-label="Is it worth it">
+        <div class="verdict-row">
+          <span class="verdict" id="verdict" hidden></span>
+          <span class="verdict-text" id="verdict-text"></span>
+        </div>
+        <div class="alert" id="scam" hidden>A rent this far below similar units can be a sign of a scam or a listing error. See the unit in person and confirm who the landlord or agent is before you pay a deposit or share personal details.</div>
+        <div class="pct" id="pct-block" hidden>
+          <h3>Where this rent sits</h3>
+          <svg id="pct-meter" viewBox="0 0 400 120" role="img" aria-label="The model's likely range and similar listings' rents on one scale, with the listed rent marked"></svg>
+          <p class="pct-text" id="pct-text"></p>
+        </div>
+        <div class="deal-list">
+          <h3 id="neg-title">There is negotiable space on</h3>
+          <ul id="neg"></ul>
+        </div>
+        <div class="deal-list">
+          <h3>Points in its favour</h3>
+          <ul id="pros"></ul>
+        </div>
+        <p class="counter" id="counter" hidden></p>
+        <div class="unseen">
+          <h3>Things the model can't see</h3>
+          <p>Check these when you visit, since they can justify a higher or lower rent: the neighbourhood and street, floor and view, building age and condition, recent renovations, light and noise, utilities included, lease length and any move-in specials.</p>
+        </div>
+        <div class="summary-box">
+          <label for="summary-text">Message to the agent <span class="legend-note">edit it before copying if you like</span></label>
+          <textarea id="summary-text" rows="9"></textarea>
+          <div class="copy-row">
+            <button type="button" class="btn" id="copy-btn">Copy message</button>
+            <button type="button" class="linkbtn" id="summary-reset" hidden>Undo my edits</button>
+            <span class="copy-status" id="copy-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <p class="fine" id="deal-fine"></p>
+      </section>
+      <div class="trend">
+        <h3 id="trend-title">Rent trend</h3>
+        <svg id="trend-svg" viewBox="0 0 400 96" role="img" aria-label="Regional rent index since 2019"></svg>
+        <p class="trend-text" id="trend-text"></p>
+      </div>
+      <details class="model-details">
+        <summary>Model details</summary>
+      <dl class="stats">
+        <div><dt>Market segment (k-means)</dt><dd id="segment"></dd></div>
+        <div><dt>Estimated $ per sq ft</dt><dd id="pps"></dd></div>
+        <div><dt id="state-pps-label">State median $ per sq ft</dt><dd id="state-pps"></dd></div>
+        <div><dt>Listings from this state</dt><dd id="state-n"></dd></div>
+      </dl>
+      </details>
+      <div class="notes" id="notes"></div>
+    </aside>
+  </div>
+
+  <div class="footer">
+    <details>
+      <summary>About the model</summary>
+      <p>This follows the team's analysis. States are grouped into Low, Medium and High market segments by k-means on each state's median rent per sq ft, and each segment has its own random forest that predicts monthly <code>price</code> from bathrooms, bedrooms, square feet, state and the 27 amenities.</p>
+      <div class="seg-table-wrap">
+        <table>
+          <thead><tr><th>Segment</th><th class="num">States</th><th class="num">Listings</th><th class="num">5-fold CV R²</th><th class="num">Median error</th><th class="num">Tree nodes</th></tr></thead>
+          <tbody id="seg-rows"></tbody>
+        </table>
+      </div>
+      <ul>
+        <li>This page runs the team's final models unchanged: <code>RandomForestRegressor(random_state=0)</code> with default settings, 100 fully grown trees per segment, trained on all listings in the segment. The page downloads only the segment of the state you choose, once per visit.</li>
+        <li>The R² column is the 5-fold cross-validation score from the notebook, recomputed with the same code.</li>
+        <li>The 80% range comes from the cross-validated errors in each segment: 8 in 10 real rents fell inside it. It is wider in the High segment, where rents vary the most.</li>
+        <li>"What each amenity changes here" compares the estimate with and without that amenity for this specific unit. These are associations in the data, not the value an amenity adds.</li>
+        <li>The model was trained on asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com.</li>
+      </ul>
+    </details>
+    <details>
+      <summary>How the verdict and negotiation points work</summary>
+      <ul>
+        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to 3% above the estimate is a fair price; above that but inside the range leaves room to negotiate; above the range is more than the model expects.</li>
+        <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead.</li>
+        <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
+        <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly.</li>
+        <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state or market segment.</li>
+        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state.</li>
+        <li><strong>Move-in specials</strong>: free weeks and one-time discounts are spread over the lease to give the rent after specials, which is what the verdict uses.</li>
+        <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
+        <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
+        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
+      </ul>
+    </details>
+    <details>
+      <summary>Bringing the estimate up to date</summary>
+      <p id="adjust-desc"></p>
+      <div class="seg-table-wrap">
+        <table>
+          <thead><tr><th>Region</th><th>BLS series</th><th class="num">2019 average</th><th class="num" id="adjust-target-head">Latest</th><th class="num">Multiplier</th></tr></thead>
+          <tbody id="adjust-rows"></tbody>
+        </table>
+      </div>
+      <ul>
+        <li>The model's 2019-price estimate is multiplied by the rent index growth of the listing's Census region. The model itself is unchanged.</li>
+        <li>This uses the rent index only. It already includes general inflation, so the all-items CPI is not applied on top.</li>
+        <li>The adjustment assumes every unit in a region grew at the region's average rate. States, cities and unit types within a region can differ.</li>
+        <li>The BLS index covers rents paid by all tenants, including existing leases, so it can rise more slowly than rents on new listings.</li>
+      </ul>
+    </details>
+    <details>
+      <summary>Columns from the dataset that are not inputs</summary>
+      <ul>
+        <li><code>price</code>, <code>price_display</code>: the value being predicted.</li>
+        <li><code>cityname</code>, <code>latitude</code>, <code>longitude</code>, <code>address</code>: the team's model uses the state for location.</li>
+        <li><code>pets_allowed</code>, <code>has_photo</code>, <code>fee</code>: not used in the team's model.</li>
+        <li><code>category</code>, <code>price_type</code>, <code>currency</code>: the data covers monthly USD apartment rents only.</li>
+        <li><code>id</code>, <code>title</code>, <code>body</code>, <code>source</code>, <code>time</code>: identifiers, free text and posting metadata.</li>
+      </ul>
+    </details>
+    <details>
+      <summary>Updating the model</summary>
+      <p>Running <code>train_team_rf_full.py</code> rebuilds <code>model.json</code> (segments, states, scores and feature names) and the compressed tree files <code>rf_high.txt</code>, <code>rf_medium.txt</code> and <code>rf_low.txt</code>. Features follow the order scikit-learn's <code>get_feature_names_out()</code> gives them, such as <code>cats__state_TX</code> and <code>remainder__square_feet</code>, so a change to the notebook's features carries over when the files are rebuilt.</p>
+    </details>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const STATE_NAMES = {AL:"Alabama",AK:"Alaska",AZ:"Arizona",AR:"Arkansas",CA:"California",CO:"Colorado",CT:"Connecticut",DE:"Delaware",DC:"District of Columbia",FL:"Florida",GA:"Georgia",HI:"Hawaii",ID:"Idaho",IL:"Illinois",IN:"Indiana",IA:"Iowa",KS:"Kansas",KY:"Kentucky",LA:"Louisiana",ME:"Maine",MD:"Maryland",MA:"Massachusetts",MI:"Michigan",MN:"Minnesota",MS:"Mississippi",MO:"Missouri",MT:"Montana",NE:"Nebraska",NV:"Nevada",NH:"New Hampshire",NJ:"New Jersey",NM:"New Mexico",NY:"New York",NC:"North Carolina",ND:"North Dakota",OH:"Ohio",OK:"Oklahoma",OR:"Oregon",PA:"Pennsylvania",RI:"Rhode Island",SC:"South Carolina",SD:"South Dakota",TN:"Tennessee",TX:"Texas",UT:"Utah",VT:"Vermont",VA:"Virginia",WA:"Washington",WV:"West Virginia",WI:"Wisconsin",WY:"Wyoming"};
+const EXAMPLE = { state: "TX", city: "Austin", sqft: 900, beds: "2", baths: "1", amenities: ["Parking", "Pool", "Gym"], listed: 1650 };
+
+let M = null;
+let R = null;
+let T = null;
+let lastSummary = "";
+let lastParsedText = null;
+let summaryEdited = false;
+let LS = null;
+const getListed = () => { const v = parseFloat($("listed-in").value); return v > 0 ? v : null; };
+const share = v => Math.round(v * 100) + "%";
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const monthName = ym => { const [y, m] = ym.split("-"); return `${MONTHS[+m - 1]} ${y}`; };
+const forests = {};
+const loading = {};
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const money = v => "$" + Math.round(v).toLocaleString("en-US");
+const round10 = v => Math.round(v / 10) * 10;
+const signedPct = r => (r >= 0 ? "+" : "−") + Math.abs(r * 100).toFixed(1) + "%";
+
+function loadSegment(seg) {
+  if (!loading[seg]) {
+    const S = M.segments[seg];
+    loading[seg] = fetch(S.file)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(b64 => {
+        const bin = atob(b64.trim());
+        const gz = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) gz[i] = bin.charCodeAt(i);
+        return new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+      })
+      .then(buf => {
+        const L = S.layout, n = S.n_nodes;
+        const feat = new Uint8Array(buf, L.feat, n), right = new Uint32Array(buf, L.right, n);
+        for (let i = 0; i < n; i++) if (feat[i] !== 255) right[i] += i;
+        forests[seg] = { features: S.features, roots: S.roots, feat, val: new Float32Array(buf, L.val, n), right };
+        return forests[seg];
+      });
+  }
+  return loading[seg];
+}
+
+function forestRaw(F, x) {
+  const { feat, val, right, roots } = F;
+  let sum = 0;
+  for (const root of roots) {
+    let n = root;
+    while (feat[n] !== 255) n = x[feat[n]] <= val[n] ? n + 1 : right[n];
+    sum += val[n];
+  }
+  return sum / roots.length;
+}
+
+function predict(inp) {
+  const F = forests[M.state_stats[inp.state].segment];
+  const vals = {
+    "remainder__bathrooms": inp.baths, "remainder__bedrooms": inp.beds, "remainder__square_feet": inp.sqft,
+    [`cats__state_${inp.state}`]: 1,
+  };
+  inp.amen.forEach(a => { vals[`remainder__${a}`] = 1; });
+  return forestRaw(F, F.features.map(f => vals[f] ?? 0));
+}
+
+function fillCities() {
+  const list = M.cities_by_state[$("state").value] || [];
+  $("city-list").innerHTML = list.map(c => `<option value="${esc(c)}"></option>`).join("");
+}
+
+function setup() {
+  const states = Object.keys(M.state_stats).sort((a, b) => (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b));
+  $("state").innerHTML = states.map(s => `<option value="${s}">${STATE_NAMES[s] || s} (${s}) · ${M.state_stats[s].segment}</option>`).join("");
+  $("chips").innerHTML = M.amenities.map((a, i) =>
+    `<label class="chip"><input type="checkbox" id="am-${i}" value="${esc(a)}"><span>${esc(a)}</span></label>`).join("");
+
+  $("state").value = EXAMPLE.state; fillCities();
+  $("city").value = EXAMPLE.city; $("sqft").value = EXAMPLE.sqft;
+  $("beds").value = EXAMPLE.beds; $("baths").value = EXAMPLE.baths; $("listed-in").value = EXAMPLE.listed;
+  document.querySelectorAll("#chips input").forEach(el => { el.checked = EXAMPLE.amenities.includes(el.value); });
+
+  $("seg-rows").innerHTML = ["Low", "Medium", "High"].map(seg => {
+    const g = M.segments[seg];
+    return `<tr><td>${seg}</td><td class="num">${g.states.length}</td><td class="num">${g.n.toLocaleString()}</td><td class="num">${g.cv_r2.toFixed(4)}</td><td class="num">${(g.median_abs_pct_error * 100).toFixed(1)}%</td><td class="num">${g.n_nodes.toLocaleString()}</td></tr>`;
+  }).join("");
+
+  const target = monthName(R.target_period);
+  $("est-label").textContent = `Monthly rent in ${target} prices`;
+  $("adjust-target-head").textContent = target;
+  $("adjust-desc").textContent = `Source: ${R.source}. Each region's index in ${target} divided by its ${R.base_period}.`;
+  $("adjust-rows").innerHTML = Object.entries(R.regions).map(([name, g]) =>
+    `<tr><td>${esc(name)}</td><td><code>${esc(g.series)}</code></td><td class="num">${g.base.toFixed(3)}</td><td class="num">${g.latest.toFixed(3)}</td><td class="num">×${g.multiplier.toFixed(4)}</td></tr>`).join("");
+
+  $("state").addEventListener("change", () => { fillCities(); $("city").value = ""; update(); });
+  $("f").addEventListener("input", update);
+  $("f").addEventListener("submit", e => e.preventDefault());
+  $("clear-am").addEventListener("click", () => { document.querySelectorAll("#chips input").forEach(el => el.checked = false); update(); });
+  $("copy-btn").addEventListener("click", () => {
+    const ta = $("summary-text"), text = ta.value;
+    if (!text.trim()) return;
+    const fallback = () => { ta.focus(); ta.select(); $("copy-status").textContent = "Press Cmd+C or Ctrl+C to copy the selected text."; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => { $("copy-status").textContent = "Copied the text above."; }, fallback);
+    } else fallback();
+  });
+  $("fee-kind").innerHTML = Object.entries(FEE_KINDS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  $("fee-group").innerHTML = Object.entries(FEE_GROUPS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  $("fee-kind").value = "monthly";
+  ["pets", "parking", "addons"].forEach(g => $(`count-${g}`).addEventListener("input", e => { feeCount[g] = e.target.checked; }));
+  $("fee-add").addEventListener("click", () => {
+    const name = $("fee-name").value.trim(), kind = $("fee-kind").value, amount = parseFloat($("fee-amount").value) || 0;
+    if (!name || (kind !== "varies" && !(amount > 0))) return;
+    addFees([{ name, amount: kind === "varies" ? 0 : amount, kind, group: $("fee-group").value }]);
+    $("fee-name").value = ""; $("fee-amount").value = "";
+    update();
+  });
+  renderFees();
+  $("summary-text").addEventListener("input", () => {
+    summaryEdited = $("summary-text").value !== lastSummary;
+    $("summary-reset").hidden = !summaryEdited;
+  });
+  $("summary-reset").addEventListener("click", () => {
+    summaryEdited = false; $("summary-reset").hidden = true; $("summary-text").value = lastSummary;
+  });
+  $("parse-btn").addEventListener("click", runParse);
+  $("paste").addEventListener("paste", () => {
+    // a new paste replaces text that has already been read, so tabs can be pasted one after another
+    if ($("paste").value === lastParsedText) $("paste").value = "";
+    setTimeout(runParse, 0);
+  });
+  $("paste-clear").addEventListener("click", () => { $("paste").value = ""; $("found").hidden = true; $("listed-in").value = ""; update(); });
+  ["sqft", "beds", "baths", "listed-in"].forEach(id => $(id).addEventListener("input", () => {
+    document.querySelectorAll("#found .unit").forEach(b => b.setAttribute("aria-pressed", "false"));
+  }));
+  update();
+}
+
+function update() {
+  const s = $("state").value, st = M.state_stats[s], seg = st.segment, S = M.segments[seg];
+  const sqft = parseFloat($("sqft").value), beds = +$("beds").value, baths = +$("baths").value;
+  const amen = [...document.querySelectorAll("#chips input:checked")].map(el => el.value);
+  const notes = [];
+
+  const region = R.state_region[s], mult = R.regions[region].multiplier;
+  drawTrend(region, mult);
+  $("where").textContent = `${$("city").value.trim() || "Any city"}, ${s}`;
+  $("segment").textContent = seg;
+  $("state-pps-label").textContent = `State median $ per sq ft, adjusted to ${R.target_period.slice(0, 4)}`;
+  $("state-pps").textContent = "$" + (st.median_pps * mult).toFixed(2);
+  $("state-n").textContent = st.n.toLocaleString();
+
+  if (!(sqft > 0)) {
+    $("est").innerHTML = "–<small>/ month</small>";
+    $("range").textContent = "Enter the unit size to see an estimate.";
+    $("pps").textContent = "–"; $("notes").innerHTML = ""; $("adjust").textContent = "";
+    $("verdict").hidden = $("counter").hidden = $("listed-fig").hidden = true; $("verdict-text").textContent = "";
+    $("neg").innerHTML = $("pros").innerHTML = ""; $("deal-fine").textContent = "";
+    $("pct-block").hidden = $("scam").hidden = $("costs").hidden = true; lastSummary = "";
+    return;
+  }
+  if (!forests[seg]) {
+    $("est").innerHTML = "…<small>/ month</small>";
+    $("range").textContent = `Loading the ${seg} segment model (first time only)…`;
+    loadSegment(seg).then(update).catch(() => { $("load-error").hidden = false; });
+    return;
+  }
+
+  const inp = { state: s, sqft, beds, baths, amen };
+  const est2019 = predict(inp), est = est2019 * mult;
+  const lo = est * S.interval.low_mult, hi = est * S.interval.high_mult;
+  const bedLabel = beds === 0 ? "studio" : `${beds}-bed`;
+
+  $("est").innerHTML = `${money(round10(est))}<small>/ month</small>`;
+  $("range").innerHTML = `Likely <strong>${money(round10(lo))}–${money(round10(hi))}</strong>`;
+  $("adjust").innerHTML = `Model estimate in 2019 prices <strong>${money(round10(est2019))}</strong> × ${mult.toFixed(4)}, the ${esc(region)} rent index change from the ${esc(R.base_period)} to ${esc(monthName(R.target_period))}`;
+  $("pps").textContent = "$" + (est / sqft).toFixed(2);
+
+  $("size-hint").textContent = (sqft < 250 || sqft > 4000) ? "Few listings in the data are outside 250–4,000 sq ft, so this estimate is less reliable." : "";
+  if (st.n < 50) notes.push(`Only ${st.n} listings from ${STATE_NAMES[s] || s} in the data, so the state's effect is uncertain.`);
+  if (sqft / Math.max(beds, 1) < 250) notes.push("This size is small for the number of bedrooms. Check the square footage.");
+  $("notes").innerHTML = notes.map(n => `<div class="note">${esc(n)}</div>`).join("");
+
+  renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft, amen, bedLabel });
+}
+
+function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft, amen, bedLabel }) {
+  const num = id => Math.max(0, parseFloat($(id).value) || 0);
+  const listedRaw = getListed();
+  const lease = Math.max(1, num("lease-in") || 12), freeWeeks = num("free-in"), oneTime = num("discount-in"), days = num("days-in");
+  const ft = feeTotals(lease);
+  const freeValue = listedRaw ? listedRaw * 12 / 52 * freeWeeks : 0;
+  const hasSpecials = !!listedRaw && (freeWeeks > 0 || oneTime > 0);
+  // with specials, the verdict and comparisons use the average monthly rent over the lease
+  const listed = listedRaw ? (listedRaw * lease - freeValue - oneTime) / lease : null;
+  const priceWord = hasSpecials ? "Rent after specials" : "Listed rent";
+  const stateName = STATE_NAMES[s] || s;
+  let b = T.by_state[`${s}|${beds}`], bName = `${bedLabel} listings in ${stateName}`;
+  if (!b || b.n < T.min_n) { b = T.by_segment[`${seg}|${beds}`]; bName = `${bedLabel} listings in ${seg}-segment states`; }
+  const neg = [], pros = [], fine = [];
+  const talk = { missing: [], size: false, baths: false, days: 0, local: null };
+  let verdictCls = null;
+  const minGain = Math.max(15, est * 0.01);
+  const fairTop = est * 1.03;
+
+  const costs = $("costs");
+  costs.hidden = !listedRaw || (!hasSpecials && !fees.length);
+  if (!costs.hidden) {
+    const rows = [];
+    if (hasSpecials) {
+      const weeks = `${freeWeeks} free ${freeWeeks === 1 ? "week" : "weeks"}`;
+      const parts = [freeWeeks ? weeks : null, oneTime ? `a ${money(oneTime)} discount` : null].filter(Boolean).join(" and ");
+      const formula = `(${money(listedRaw)} × ${lease}${freeWeeks ? ` − ${money(freeValue)} for ${weeks}` : ""}${oneTime ? ` − ${money(oneTime)}` : ""}) ÷ ${lease}`;
+      rows.push(`<div class="cost-row"><span>Rent after specials</span><strong>${money(listed)}<small> / month</small></strong></div>` +
+        `<p class="cost-note">Average per month over a ${lease}-month lease, after ${parts}. ${formula}</p>`);
+    }
+    if (fees.length) {
+      const parts = [ft.monthly ? `${money(ft.monthly)} monthly fees` : null,
+        ft.once + ft.moveout ? `${money(ft.once + ft.moveout)} one-time fees ÷ ${lease}` : null].filter(Boolean);
+      rows.push(`<div class="cost-row"><span>Estimated total monthly cost</span><strong>${money(listed + ft.perMonth)}<small> / month</small></strong></div>` +
+        `<p class="cost-note">${priceWord} ${money(listed)}${parts.length ? " + " + parts.join(" + ") : ""}.` +
+        `${ft.varies.length ? ` Plus amounts that vary: ${esc(ft.varies.join(", "))}.` : ""}</p>`);
+      rows.push(`<div class="cost-row"><span>Cash needed at move-in</span><strong>${money(listedRaw + ft.deposit + ft.once)}</strong></div>` +
+        `<p class="cost-note">First month's listed rent ${money(listedRaw)}${ft.deposit ? ` + refundable deposits ${money(ft.deposit)}` : ""}${ft.once ? ` + one-time fees ${money(ft.once)}` : ""}.</p>`);
+      if (ft.situational.length) {
+        rows.push(`<p class="cost-note">Not counted because they only apply in some cases: ${esc(ft.situational.map(f => `${f.name} ${feeAmountText(f)}`).join(", "))}.</p>`);
+      }
+    }
+    costs.innerHTML = rows.join("");
+  }
+
+  if (listed && listed > fairTop) {
+    neg.push([listed - est, `${priceWord} is <strong>${money(listed - est)}</strong> (${signedPct(listed / est - 1)}) above the model estimate.`, "price"]);
+  }
+  if (days > 14) {
+    talk.days = Math.round(days);
+    neg.push([est * 0.03, `Listed for ${Math.round(days)} days, longer than about two weeks, which often leaves more room to negotiate.`, "price"]);
+  }
+  ft.big.slice(0, 2).forEach(f => neg.push([f.kind === "monthly" ? f.amount : f.amount / lease, f.kind === "monthly"
+    ? `The ${esc(f.name)} adds <strong>${feeAmountText(f)}</strong>. Ask whether it can be dropped or included in the rent.`
+    : `The ${esc(f.name)} of <strong>${feeAmountText(f)}</strong> is due up front. Ask for it to be waived.`, "fee"]));
+
+  // dollar effects are averaged over up to 100 real listings like this one (same state and bedrooms), which is
+  // steadier than changing one feature on this unit alone
+  if (b) {
+    const { eff, sample } = amenityEffects(s, seg, beds);
+    M.amenities.filter(a => !amen.includes(a)).forEach(a => {
+      const sh = b.amen[a] || 0, gain = eff[a] * mult;
+      if (sh >= 0.25 && gain >= minGain) talk.missing.push([gain, a]);
+      if (sh >= 0.25 && gain >= minGain) neg.push([gain, `${esc(a)} isn't mentioned: ${share(sh)} of ${esc(bName)} mention it, and on average similar units with it are estimated <strong>${money(gain)}/mo</strong> higher. Ask whether it's available.`, "amenity"]);
+    });
+    amen.forEach(a => {
+      const sh = b.amen[a] || 0, gain = eff[a] * mult;
+      if (gain >= minGain) pros.push([gain, `Has ${esc(a)}: ${sh < 0.5 ? "only " : ""}${share(sh)} of ${esc(bName)} mention it. On average it adds about <strong>${money(gain)}/mo</strong> for similar units.`]);
+    });
+
+    const sizeGain = avgEffect(sample, u => [{ ...u, sqft: b.sqft }, { ...u, sqft }]) * mult;
+    if (sqft < b.sqft * 0.9 && sizeGain >= minGain) {
+      talk.size = true;
+      neg.push([sizeGain, `Smaller than usual: ${sqft.toLocaleString()} sq ft vs. ${b.sqft.toLocaleString()} sq ft typical for ${esc(bName)}. On average, similar units are estimated <strong>${money(sizeGain)}/mo</strong> higher at the typical size.`, "price"]);
+    } else if (sqft > b.sqft * 1.1 && -sizeGain >= minGain) {
+      pros.push([-sizeGain, `Larger than usual: ${sqft.toLocaleString()} sq ft vs. ${b.sqft.toLocaleString()} sq ft typical for ${esc(bName)}. On average the extra space adds about <strong>${money(-sizeGain)}/mo</strong> for similar units.`]);
+    }
+
+    const bathGain = avgEffect(sample, u => [{ ...u, baths: b.baths }, { ...u, baths }]) * mult;
+    if (baths < b.baths && bathGain >= minGain) {
+      talk.baths = true;
+      neg.push([bathGain, `Fewer bathrooms: ${baths} vs. ${b.baths} typical for ${esc(bName)}. On average, similar units with ${b.baths} are estimated <strong>${money(bathGain)}/mo</strong> higher.`, "price"]);
+    } else if (baths > b.baths && -bathGain >= minGain) {
+      pros.push([-bathGain, `More bathrooms: ${baths} vs. ${b.baths} typical for ${esc(bName)}. On average the extra bathrooms add about <strong>${money(-bathGain)}/mo</strong> for similar units.`]);
+    }
+  }
+
+  const cityText = $("city").value.trim();
+  const city = cityText ? findCity(s, cityText) : null;
+  const cityRow = city ? T.by_city[`${s}|${city}|${beds}`] : null;
+  if (cityRow && listed) {
+    const local = cityRow.median * mult, d = listed / local - 1;
+    const detail = `the typical ${esc(bedLabel)} in ${esc(city)} (${money(round10(local))}, median of ${cityRow.n} listings, adjusted to ${R.target_period.slice(0, 4)})`;
+    if (d > 0.05) talk.local = { city, price: local };
+    if (d > 0.05) neg.push([listed - local, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> above ${detail}.`, "price"]);
+    else if (d < -0.05) pros.push([local - listed, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> below ${detail}.`]);
+  } else if (cityText && !cityRow) {
+    fine.push(`There aren't enough ${bedLabel} listings in ${city || cityText} for a local price comparison.`);
+  }
+
+  // similar listings for the scale: same bedrooms and size within 20%, in the city if it has enough, then the state
+  let pctSentence = "";
+  const sim = similarPrices(s, seg, beds, sqft, city, bedLabel, stateName);
+  $("pct-block").hidden = !sim;
+  if (sim) {
+    const prices = sim.prices.map(p => p * mult);
+    const p25 = quantile(prices, 0.25), p50 = quantile(prices, 0.5), p75 = quantile(prices, 0.75);
+    const value = listed || est, rank = 100 * prices.filter(p => p < value).length / prices.length;
+    const rankText = rank < 5 ? "lower than 95%" : rank > 95 ? "higher than 95%" : `higher than ${Math.round(rank)}%`;
+    pctSentence = `${listed ? `${priceWord} of ${money(listed)}` : `The estimate of ${money(round10(est))}`} is ${rankText} of ${sim.name} (${prices.length.toLocaleString()} listings, adjusted to ${R.target_period.slice(0, 4)}).`;
+    $("pct-text").innerHTML =
+      `<strong>Model estimate</strong> ${money(round10(est))}, likely ${money(round10(lo))}–${money(round10(hi))}. ` +
+      `<strong>Similar listings</strong>: the middle half rent for ${money(round10(p25))}–${money(round10(p75))}, median ${money(round10(p50))}. ` +
+      esc(pctSentence);
+    drawScale(lo, est, hi, p25, p50, p75, listed);
+  }
+
+  const list = (items, empty) => {
+    items.sort((x, y) => y[0] - x[0]);
+    if (!items.length) return `<li class="none">${empty}</li>`;
+    const more = items.length - 5;
+    return items.slice(0, 5).map(([, t]) => `<li>${t}</li>`).join("")
+      + (more > 0 ? `<li class="none">and ${more} smaller ${more === 1 ? "point" : "points"}</li>` : "");
+  };
+  // what the first list shows depends on the verdict: arguing the rent down only makes sense above the estimate
+  const suspicious = !!listed && listed < lo * 0.8;
+  const vstate = !listed ? null : suspicious ? "low" : listed < lo ? "good" : listed <= fairTop ? "fair" : "high";
+  fees.filter(f => f.twin).forEach(f => neg.push([Infinity, `Check whether "${esc(f.twin)}" and "${esc(f.name)}" are the same charge.`, "verify"]));
+  if (ft.varies.length) neg.push([Infinity, `Ask for a monthly estimate of the costs that vary: ${esc(ft.varies.join(", "))}.`, "verify"]);
+  const keep = { high: ["verify", "price", "fee", "amenity"], fair: ["verify", "fee", "amenity"], good: ["verify", "amenity"], low: ["verify", "amenity"] }[vstate] || ["verify", "price", "fee", "amenity"];
+  $("neg-title").textContent = { high: "There is negotiable space on", fair: "Worth asking about", good: "Before you sign", low: "Before you sign" }[vstate] || "Possible negotiation points";
+  $("neg").innerHTML = list(neg.filter(x => keep.includes(x[2])),
+    vstate === "good" || vstate === "low" ? "Nothing in the data needs double-checking."
+      : vstate === "fair" ? "Nothing beyond the rent stands out to ask about."
+      : "No clear weak points compared with similar listings.");
+  $("pros").innerHTML = list(pros, "No clear strengths compared with similar listings.");
+
+  const v = $("verdict");
+  $("scam").hidden = !suspicious;
+  $("listed-fig").hidden = !listed;
+  if (!listed) {
+    v.hidden = true;
+    $("verdict-text").textContent = "Enter the listed rent to see whether this unit is worth it.";
+    $("counter").hidden = true;
+  } else {
+    const range = `${money(round10(lo))}–${money(round10(hi))}`;
+    const [cls, label, text, counter] =
+      suspicious ? ["warn", "Unusually low", `${priceWord} of ${money(listed)} is far below the likely range of ${range}.`,
+        "Confirm the listing is genuine before anything else."]
+      : listed < lo ? ["good", "Good deal", `${priceWord} of ${money(listed)} is below the likely range of ${range}.`,
+        "This is below what similar units go for, so pushing on price could cost you the unit. If you like it, move quickly and confirm the listing is genuine."]
+      : listed <= fairTop ? ["fair", "Fair price", `${priceWord} of ${money(listed)} is close to or below the estimate of ${money(round10(est))}.`,
+        "The price is reasonable. If you ask for anything, keep it low-cost for the landlord, such as a flexible move-in date or a waived application fee."]
+      : [listed <= hi ? "warn" : "bad", listed <= hi ? "Room to negotiate" : "Above expected range",
+        listed <= hi ? `${priceWord} of ${money(listed)} is above the estimate but inside the likely range.` : `${priceWord} of ${money(listed)} is above the likely range of ${range}.`,
+        `Suggested counter-offer: <strong>${money(round10(est))}</strong>, the model estimate, about ${money(listed - est)} below the ${priceWord.toLowerCase()}. Lead with the points above.`];
+    verdictCls = suspicious ? "warn-low" : cls;
+    v.className = `verdict ${cls}`; v.textContent = label; v.hidden = false;
+    $("listed-num").innerHTML = `${money(listedRaw)}<small>/ month</small>`;
+    $("listed-gap").className = `verdict ${cls}`;
+    $("listed-gap").textContent = `${signedPct(listed / est - 1)} vs. estimate${hasSpecials ? ", after specials" : ""}`;
+    $("verdict-text").textContent = text;
+    $("counter").hidden = false;
+    $("counter").innerHTML = counter;
+  }
+  fine.push(`Compared with 2018–2019 listings adjusted to ${monthName(R.target_period)} prices. Amenity effects are patterns in the data, not guaranteed values. Use these as talking points with the agent.`);
+  $("deal-fine").textContent = fine.join(" ");
+
+  // a plain-language message to the agent: interest, questions about what the listing leaves out, then asks
+  const unitText = `${beds === 0 ? "studio" : `${beds}-bedroom`}, ${baths}-bath unit (${sqft.toLocaleString()} sq ft)`;
+  const place = city || cityText;
+  const questions = [], asks = [];
+  talk.missing.sort((a, b) => b[0] - a[0]).slice(0, 2).forEach(([, a]) =>
+    questions.push(`I didn't see ${AMENITY_PHRASE[a] || a.toLowerCase()} mentioned in the listing. Is that available?`));
+  if (!amen.includes("Parking") && !fees.some(f => f.group === "parking" || /parking|garage/i.test(f.name))) questions.push("Is parking available, and is there a monthly cost?");
+  if (!fees.length) questions.push("Are there any required monthly fees on top of the rent, such as trash, utilities or amenity fees?");
+  if (ft.varies.length) questions.push(`Could you give me a rough monthly estimate for ${ft.varies.slice(0, 3).map(n => n.replace(/^utility\s*-\s*/i, "").replace(/\s*-\s*third party$/i, "").toLowerCase()).join(", ")}?`);
+  fees.filter(f => f.twin).forEach(f => questions.push(`Are the "${f.twin}" and "${f.name}" separate charges, or the same one?`));
+  if (!hasSpecials) questions.push("Are there any move-in specials right now?");
+  questions.push("When is the unit available, and what lease lengths do you offer?");
+
+  if (verdictCls === "warn" || verdictCls === "bad") {
+    const market = talk.local
+      ? `From what I've seen, similar ${bedLabel} units in ${talk.local.city} rent for around ${money(round10(talk.local.price))}.`
+      : `From what I've seen, similar units in the area rent for around ${money(round10(est))}.`;
+    const traits = [talk.size ? `is a bit smaller than most ${bedLabel} units` : null,
+      talk.baths ? "has fewer bathrooms than most" : null,
+      talk.days ? `has been listed for ${talk.days} days` : null].filter(Boolean);
+    const traitText = traits.length ? ` This one ${traits.length > 1 ? `${traits.slice(0, -1).join(", ")} and ${traits[traits.length - 1]}` : traits[0]}.` : "";
+    asks.push(`${market}${traitText} Would you consider ${money(round10(est))} a month?`);
+  }
+  if (verdictCls && verdictCls !== "good" && verdictCls !== "warn-low") {
+    ft.big.slice(0, 2).forEach(f => asks.push(f.kind === "monthly"
+      ? `Is the "${f.name}" charge of ${feeAmountText(f)} required, or could it be dropped or included in the rent?`
+      : `Would you be able to waive the "${f.name}" charge (${feeAmountText(f)})?`));
+  }
+  if (verdictCls === "fair" && !ft.big.length) asks.push("Would you be open to waiving the application fee or offering a flexible move-in date?");
+
+  const opening = `Hi, I'm interested in the ${unitText}${place ? ` in ${place}` : ""}${listedRaw ? ` listed at ${money(listedRaw)} a month` : ""}.`;
+  const closing = verdictCls === "warn-low"
+    ? "Before going further, could I schedule an in-person viewing? I'd like to see the unit and meet you before applying or paying anything."
+    : verdictCls === "good"
+      ? "I'd like to move forward soon. Could I schedule a viewing, and what are the next steps to apply?"
+      : "Thanks, and I look forward to hearing from you.";
+  const lines = [
+    opening,
+    "",
+    questions.length ? "A few questions:" : null,
+    ...questions.map(q => `- ${q}`),
+    asks.length ? "" : null,
+    ...asks,
+    "",
+    closing,
+  ];
+  lastSummary = lines.filter(l => l !== null).join("\n");
+  if (!summaryEdited) $("summary-text").value = lastSummary;
+  $("copy-status").textContent = "";
+}
+
+const effectCache = {};
+const AMENITY_PHRASE = {
+  "AC": "air conditioning", "Alarm": "an alarm system", "Basketball": "a basketball court", "Cable or Satellite": "cable or satellite TV",
+  "Clubhouse": "a clubhouse", "Dishwasher": "a dishwasher", "Doorman": "a doorman", "Elevator": "an elevator", "Fireplace": "a fireplace",
+  "Garbage Disposal": "a garbage disposal", "Gated": "a gated entrance", "Golf": "a golf course", "Gym": "a gym", "Hot Tub": "a hot tub",
+  "Internet Access": "internet access", "Luxury": "luxury finishes", "Parking": "parking", "Patio/Deck": "a patio or deck",
+  "Playground": "a playground", "Pool": "a pool", "Refrigerator": "a refrigerator", "Storage": "storage space", "TV": "a TV",
+  "Tennis": "a tennis court", "View": "a view", "Washer Dryer": "an in-unit washer and dryer", "Wood Floors": "wood floors",
+};
+const maskToAmen = m => LS.amenities.filter((a, i) => m & (1 << i));
+
+function listingsLike(s, seg, beds) {
+  const pick = st => (LS.states[st] ? LS.states[st].rows : []).filter(r => r[0] === beds).map(r => [st, r]);
+  const own = pick(s);
+  return own.length >= T.min_n ? own : M.segments[seg].states.flatMap(pick);
+}
+
+function avgEffect(sample, change) {
+  if (!sample.length) return 0;
+  let sum = 0;
+  sample.forEach(u => { const [a, b] = change(u); sum += predict(a) - predict(b); });
+  return sum / sample.length;
+}
+
+function amenityEffects(s, seg, beds) {
+  const key = `${s}|${beds}`;
+  if (!effectCache[key]) {
+    const rows = listingsLike(s, seg, beds), step = Math.max(1, Math.ceil(rows.length / 100));
+    const sample = rows.filter((_, i) => i % step === 0)
+      .map(([st, r]) => ({ state: st, beds: r[0], baths: r[1], sqft: r[2], amen: maskToAmen(r[5]) }));
+    const eff = {};
+    M.amenities.forEach(a => {
+      eff[a] = avgEffect(sample, u => { const others = u.amen.filter(x => x !== a); return [{ ...u, amen: [...others, a] }, { ...u, amen: others }]; });
+    });
+    effectCache[key] = { eff, sample };
+  }
+  return effectCache[key];
+}
+
+function quantile(sorted, p) {
+  const i = (sorted.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+
+function similarPrices(s, seg, beds, sqft, city, bedLabel, stateName) {
+  const inBand = r => r[0] === beds && r[2] >= sqft * 0.8 && r[2] <= sqft * 1.2;
+  const size = `${Math.round(sqft * 0.8).toLocaleString()}–${Math.round(sqft * 1.2).toLocaleString()} sq ft`;
+  const st = LS.states[s] || { rows: [], cities: [] };
+  const cityIdx = city ? st.cities.indexOf(city) : -1;
+  const segRows = M.segments[seg].states.flatMap(x => LS.states[x] ? LS.states[x].rows : []);
+  const tries = [
+    cityIdx >= 0 ? [st.rows.filter(r => inBand(r) && r[4] === cityIdx), `${bedLabel} listings of ${size} in ${city}`] : null,
+    [st.rows.filter(inBand), `${bedLabel} listings of ${size} in ${stateName}`],
+    [segRows.filter(inBand), `${bedLabel} listings of ${size} in ${seg}-segment states`],
+    [st.rows.filter(r => r[0] === beds), `all ${bedLabel} listings in ${stateName}, any size`],
+  ].filter(Boolean);
+  const hit = tries.find(([rows]) => rows.length >= T.min_n);
+  return hit ? { prices: hit[0].map(r => r[3]).sort((a, b) => a - b), name: hit[1] } : null;
+}
+
+function drawScale(lo, est, hi, p25, p50, p75, listed) {
+  const L0 = 122, R0 = 390, y1 = 40, y2 = 80;
+  const marks = [lo, hi, p25, p75, est, listed ?? est];
+  const min = Math.min(...marks) * 0.94, max = Math.max(...marks) * 1.05;
+  const x = v => L0 + (v - min) / (max - min) * (R0 - L0);
+  const step = niceStep((max - min) / 3);
+  let ticks = "";
+  for (let t = Math.ceil(min / step) * step; t <= max; t += step) {
+    ticks += `<line x1="${x(t)}" x2="${x(t)}" y1="22" y2="96" stroke="var(--line)" stroke-width="1"/>` +
+             `<text x="${x(t)}" y="112" text-anchor="middle">${money(t)}</text>`;
+  }
+  const rowLabel = (y, main, sub) =>
+    `<text x="0" y="${y - 1}" class="row-label">${main}</text><text x="0" y="${y + 12}">${sub}</text>`;
+  let listedMark = "";
+  if (listed) {
+    const lx = x(listed), right = lx > R0 - 90;
+    listedMark = `<line x1="${lx}" x2="${lx}" y1="16" y2="96" stroke="var(--warn-ink)" stroke-width="1.5" stroke-dasharray="3 2"/>` +
+      `<path d="M ${lx - 6} 6 L ${lx + 6} 6 L ${lx} 16 Z" fill="var(--warn-ink)"/>` +
+      `<text x="${right ? lx - 9 : lx + 9}" y="14" text-anchor="${right ? "end" : "start"}" class="listed-label">Listed ${money(listed)}</text>`;
+  }
+  $("pct-meter").innerHTML = ticks +
+    rowLabel(y1, "Model estimate", "80% likely range") +
+    `<rect x="${x(lo)}" y="${y1 - 8}" width="${x(hi) - x(lo)}" height="16" rx="3" fill="var(--band)" fill-opacity="0.45"/>` +
+    `<circle cx="${x(est)}" cy="${y1}" r="6" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>` +
+    rowLabel(y2, "Similar listings", "middle half, median") +
+    `<rect x="${x(p25)}" y="${y2 - 8}" width="${x(p75) - x(p25)}" height="16" rx="3" fill="var(--muted)" fill-opacity="0.25"/>` +
+    `<line x1="${x(p50)}" x2="${x(p50)}" y1="${y2 - 10}" y2="${y2 + 10}" stroke="var(--ink)" stroke-width="2"/>` +
+    listedMark;
+}
+
+function drawTrend(region, mult) {
+  const g = R.regions[region], W = 400, H = 96, top = 8, bottom = 74, left = 34, right = 10;
+  const idx = ym => { const [y, m] = ym.split("-").map(Number); return (y - 2019) * 12 + (m - 1); };
+  const pts = g.monthly.map(([ym, v]) => [idx(ym), v / g.base * 100]);
+  const last = pts[pts.length - 1], vmin = Math.min(...pts.map(p => p[1])), vmax = Math.max(...pts.map(p => p[1]));
+  const lo = Math.floor(vmin / 10) * 10, hi = Math.ceil(vmax / 10) * 10;
+  const x = i => left + i / last[0] * (W - left - right);
+  const y = v => bottom - (v - lo) / (hi - lo) * (bottom - top);
+  let grid = "";
+  for (let v = lo; v <= hi; v += 10) {
+    grid += `<line x1="${left}" x2="${W - right}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${left - 6}" y="${y(v) + 3.5}" text-anchor="end">${v}</text>`;
+  }
+  const years = [2019, 2021, 2023, 2025].map(yr => `<text x="${x((yr - 2019) * 12)}" y="${H - 6}" text-anchor="middle">${yr}</text>`).join("");
+  const line = pts.map((p, i) => `${i ? "L" : "M"} ${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(" ");
+  const area = `${line} L ${x(last[0]).toFixed(1)} ${bottom} L ${x(0)} ${bottom} Z`;
+  $("trend-svg").innerHTML = grid + years +
+    `<path d="${area}" fill="var(--band)" fill-opacity="0.15"/>` +
+    `<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>` +
+    `<circle cx="${x(last[0])}" cy="${y(last[1])}" r="4" fill="var(--accent)"/>`;
+  const years_since = (last[0] - 6) / 12, annual = Math.pow(mult, 1 / years_since) - 1;
+  const pc = r => (r * 100).toFixed(1) + "%";
+  $("trend-title").textContent = `Rent trend in the ${region} (BLS index, 2019 average = 100)`;
+  $("trend-text").innerHTML = `Rents are up <strong>${pc(mult - 1)}</strong> since 2019 and <strong>${pc(g.yoy)}</strong> over the past 12 months` +
+    (g.yoy < annual * 0.75 ? `, slower than the ${pc(annual)} a year average since 2019. Slower growth can give renters more room to negotiate.` : `, about the ${pc(annual)} a year average since 2019.`);
+}
+
+function niceStep(raw) {
+  const p = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / p;
+  return (n < 1.5 ? 1 : n < 3.5 ? 2.5 : n < 7.5 ? 5 : 10) * p;
+}
+
+// ---- fees ----
+// Each fee has a group (who pays it and when it counts) and a kind (how often it is paid).
+const FEE_GROUPS = { required: "Required", pets: "Pets", parking: "Parking", addons: "Add-ons", situational: "Only if it applies" };
+const FEE_KINDS = { monthly: "per month", once: "one-time", moveout: "at move-out", deposit: "refundable deposit", varies: "varies" };
+const fees = [];
+const feeCount = { pets: false, parking: false, addons: false };
+
+// a heading must be the whole line, so fee names such as "Utility - Sewer" or "Monthly Pet Rent" aren't mistaken for one
+const HEADINGS = [
+  [/^situational( fees)?$/i, "situational", null],
+  [/^(personal )?add-?ons$/i, "addons", null],
+  [/^pets?$|^pet (policy|fees)( and fees)?$|^dogs?$|^cats?$/i, "pets", null],
+  [/^parking( fees| options)?$/i, "parking", null],
+  [/^due at move-?out$/i, "required", "moveout"],
+  [/^one-?time( basics| fees)?$|^due at (application|move-?in)$/i, "required", "once"],
+  [/^required( fees)?$|^utilities( (&|and) essentials)?$/i, "required", null],
+  [/^(other )?fees( and policies)?$/i, null, null],
+];
+const SUBHEADING = /utilit|essentials|one-?time|due at/i;
+const AMOUNT = /^(\$\s?[\d,]+(?:\.\d{1,2})?|varies)\s*(\/\s*(?:mo|month)\b\.?)?/i;
+const NOT_A_FEE = /\b(bed|beds|bath|baths|sq\.?\s*ft|sf|square feet|studio|unit|plan|available|availability|price|rent range|starting|from|base rent|total)\b|\$|^[^A-Za-z]*$/i;
+// outside a fee heading, a line only counts as a fee if its name says so; this keeps "Starting at $2,306" out
+const FEE_WORD = /fee|deposit|charge|rent\b|utilit|trash|sewer|water|electric|gas\b|internet|cable|parking|garage|carport|storage|locker|pet|insurance|admin|application|amenity|package|valet|pest|smart home|service|premium/i;
+
+function headingOf(line) {
+  if (/\$|\d{2,}/.test(line) || line.length > 48) return null;
+  const h = HEADINGS.find(([re]) => re.test(line));
+  return h ? { group: h[1], kind: h[2], sub: SUBHEADING.test(line) } : null;
+}
+
+const SITUATIONAL = /transfer|month-to-month|nsf|returned|late fee|lease break|early termination|relet/i;
+const ICON_I = /\b(fee|fees|charge|deposit|rent|income|services?|applicant|insurance|utility|utilities|trash|sewer|water|electric|gas|parking|premium|storage)i$/i;
+
+function guessGroup(name) {
+  if (SITUATIONAL.test(name)) return "situational";
+  if (/\bpet|dog|cat\b|animal/i.test(name)) return "pets";
+  if (/parking|garage|carport|covered spot|reserved spot/i.test(name)) return "parking";
+  if (/storage|locker|bike/i.test(name)) return "addons";
+  return "required";
+}
+
+function parseFees(text) {
+  const lines = text.replace(/ /g, " ").split(/\n+/).map(l => l.replace(/[ⓘℹ]/g, "").replace(/\s+/g, " ").trim()).filter(Boolean);
+  const out = [];
+  let run = [], ctx = null, sinceFee = 0;
+  const settle = () => {
+    if (!run.length) return;
+    const groups = new Set(run.map(h => h.group));
+    // three or more different groups in a row is a tab bar; only a sub-heading under it tells us the context
+    ctx = groups.size >= 3 ? ([...run].reverse().find(h => h.sub) || null) : run[run.length - 1];
+    if (ctx && !ctx.group) ctx = null;
+    run = []; sinceFee = 0;
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const h = headingOf(line);
+    if (h) { run.push(h); continue; }
+    settle();
+    let name = null, amt = null;
+    const inline = line.match(/^(.*?[A-Za-z].*?)\s+((?:\$\s?[\d,]+(?:\.\d{1,2})?|varies)\s*(?:\/\s*(?:mo|month)\b\.?)?)\s*$/i);
+    if (inline) { name = inline[1]; amt = inline[2]; }
+    else if (AMOUNT.test(line) && i > 0 && !AMOUNT.test(lines[i - 1]) && !headingOf(lines[i - 1])) { name = lines[i - 1]; amt = line; }
+    if (!name || NOT_A_FEE.test(name) || !/[A-Za-z]{3}/.test(name) || name.length > 60 || (!ctx && !FEE_WORD.test(name))) {
+      if (ctx && ++sinceFee > 12) ctx = null;
+      continue;
+    }
+    const m = amt.match(AMOUNT);
+    const varies = /varies/i.test(m[1]);
+    const amount = varies ? 0 : parseFloat(m[1].replace(/[$,\s]/g, ""));
+    if (!varies && !(amount > 0 && amount < 10000)) continue;
+    name = name.replace(/\s*(\.\.\.|…)$/, "").replace(/\s*\(i\)$/i, "").trim();
+    const kind = varies ? "varies" : /deposit/i.test(name) ? "deposit" : m[2] ? "monthly" : ctx && ctx.kind === "moveout" ? "moveout" : "once";
+    out.push({ name, amount, kind, group: SITUATIONAL.test(name) ? "situational" : ctx ? ctx.group : guessGroup(name) });
+    sinceFee = 0;
+  }
+  // some sites copy their ⓘ info icon as a plain "i" stuck to the end of each fee name ("Application Feei")
+  const glued = out.filter(f => /[a-z]i$/.test(f.name)).length;
+  out.forEach(f => {
+    if ((glued >= 2 && glued >= out.length / 2 && /[a-z]{2}i$/.test(f.name)) || ICON_I.test(f.name)) f.name = f.name.slice(0, -1);
+  });
+  return out;
+}
+
+const feeKey = f => `${f.name.toLowerCase()}|${f.amount}|${f.kind}`;
+const feeStem = f => f.name.toLowerCase().replace(/^utilit(y|ies)\b/, "").replace(/[^a-z ]/g, "").trim().split(" ")[0].slice(0, 5);
+
+function addFees(list) {
+  let added = 0, skipped = 0;
+  list.forEach(f => {
+    if (fees.some(g => feeKey(g) === feeKey(f))) { skipped++; return; }
+    const twin = f.kind !== "varies" && fees.find(g => g.amount === f.amount && g.kind === f.kind && feeStem(g) === feeStem(f));
+    fees.push({ ...f, twin: twin ? twin.name : null });
+    if (f.group in feeCount && f.group !== "addons") feeCount[f.group] = true;
+    added++;
+  });
+  renderFees();
+  return { added, skipped };
+}
+
+function feeAmountText(f) {
+  if (f.kind === "varies") return "Varies";
+  const v = "$" + f.amount.toLocaleString("en-US", { minimumFractionDigits: f.amount % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  return f.kind === "monthly" ? `${v}/mo` : v;
+}
+
+function renderFees() {
+  const opts = (map, cur) => Object.entries(map).map(([k, v]) => `<option value="${k}"${k === cur ? " selected" : ""}>${v}</option>`).join("");
+  $("fees-empty").hidden = fees.length > 0;
+  $("fee-list").innerHTML = Object.keys(FEE_GROUPS).map(g => {
+    const items = fees.map((f, i) => [f, i]).filter(([f]) => f.group === g);
+    if (!items.length) return "";
+    return `<div class="fee-group"><h4>${FEE_GROUPS[g]}</h4>` + items.map(([f, i]) =>
+      `<div class="fee-row"><span class="fee-name">${esc(f.name)}${f.twin ? `<small>May be the same charge as “${esc(f.twin)}”</small>` : ""}</span>` +
+      `<span class="fee-amt">${feeAmountText(f)}</span>` +
+      `<select aria-label="When it's paid" data-i="${i}" data-k="kind">${opts(FEE_KINDS, f.kind)}</select>` +
+      `<select aria-label="Category" data-i="${i}" data-k="group">${opts(FEE_GROUPS, f.group)}</select>` +
+      `<button type="button" class="linkbtn fee-del" data-i="${i}" aria-label="Remove ${esc(f.name)}">Remove</button></div>`).join("") + `</div>`;
+  }).join("");
+  $("fee-list").querySelectorAll("select").forEach(sel => sel.addEventListener("change", () => {
+    fees[+sel.dataset.i][sel.dataset.k] = sel.value; renderFees(); update();
+  }));
+  $("fee-list").querySelectorAll(".fee-del").forEach(btn => btn.addEventListener("click", () => {
+    fees.splice(+btn.dataset.i, 1); renderFees(); update();
+  }));
+  ["pets", "parking", "addons"].forEach(g => { $(`count-${g}`).checked = feeCount[g]; });
+}
+
+function feeTotals(lease) {
+  const counts = f => f.group === "required" || feeCount[f.group];
+  const used = fees.filter(f => f.group !== "situational" && counts(f));
+  const sum = kinds => used.filter(f => kinds.includes(f.kind)).reduce((a, f) => a + f.amount, 0);
+  return {
+    monthly: sum(["monthly"]),
+    once: sum(["once"]),
+    moveout: sum(["moveout"]),
+    deposit: sum(["deposit"]),
+    perMonth: sum(["monthly"]) + (sum(["once"]) + sum(["moveout"])) / lease,
+    varies: used.filter(f => f.kind === "varies").map(f => f.name),
+    situational: fees.filter(f => f.group === "situational"),
+    big: used.filter(f => (f.kind === "once" && f.amount >= 150) || (f.kind === "monthly" && f.amount >= 50))
+      .sort((a, b) => (b.kind === "monthly" ? b.amount * lease : b.amount) - (a.kind === "monthly" ? a.amount * lease : a.amount)),
+  };
+}
+// ---- end fees ----
+
+// ---- listing text parser ----
+const AMENITY_PATTERNS = {
+  "AC": /air[ -]?condition|central air|\bA\/C\b/i,
+  "Alarm": /\balarm\b|security system/i,
+  "Basketball": /basketball/i,
+  "Cable or Satellite": /\bcable\b|satellite/i,
+  "Clubhouse": /clubhouse|club house/i,
+  "Dishwasher": /dishwasher/i,
+  "Doorman": /doorman|concierge/i,
+  "Elevator": /elevator/i,
+  "Fireplace": /fireplace/i,
+  "Garbage Disposal": /disposal/i,
+  "Gated": /\bgated\b/i,
+  "Golf": /\bgolf\b/i,
+  "Gym": /fitness|\bgym\b/i,
+  "Hot Tub": /hot tub|jacuzzi|whirlpool/i,
+  "Internet Access": /internet|wi-?fi|high[- ]speed/i,
+  "Luxury": /\bluxury\b/i,
+  "Parking": /parking|garage/i,
+  "Patio/Deck": /patio|balcon|\bdeck\b/i,
+  "Playground": /playground/i,
+  "Pool": /\bpool\b(?!\s*table)/i,
+  "Refrigerator": /refrigerator|fridge/i,
+  "Storage": /storage/i,
+  "TV": /\bTV\b|television/i,
+  "Tennis": /tennis/i,
+  "View": /\b(city|park|water|river|skyline|mountain|lake|ocean|bay)\s+views?\b|\bviews?\s+of\b/i,
+  "Washer Dryer": /washer\s*(\/|and|&)\s*dryer|in[- ]unit laundry|\bw\/d\b/i,
+  "Wood Floors": /hardwood|wood[- ](style\s+)?floor/i,
+};
+const toNum = s => parseFloat(String(s).replace(/,/g, ""));
+
+function nearest(re, before, after) {
+  let best = null;
+  const flags = re.flags.includes("g") ? re.flags : re.flags + "g";
+  for (const m of before.matchAll(new RegExp(re.source, flags))) {
+    const d = before.length - (m.index + m[0].length);
+    if (!best || d < best.d) best = { m, d };
+  }
+  const a = new RegExp(re.source, flags.replace("g", "")).exec(after);
+  if (a && (!best || a.index < best.d)) best = { m: a, d: a.index };
+  return best ? best.m : null;
+}
+
+function findCity(state, raw) {
+  const cand = raw.trim().toLowerCase();
+  const list = M.cities_by_state[state] || [];
+  let hit = null;
+  for (const c of list) {
+    const lc = c.toLowerCase();
+    if ((cand === lc || cand.endsWith(" " + lc)) && (!hit || c.length > hit.length)) hit = c;
+  }
+  return hit;
+}
+
+function parseListing(text) {
+  const t = text.replace(/ /g, " ");
+  const out = { state: null, city: null, cityRaw: null, units: [], amenities: [] };
+
+  for (const re of [/([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\s+\d{5}/g, /([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\b/g]) {
+    for (const m of t.matchAll(re)) {
+      if (!M.state_stats[m[2]]) continue;
+      const city = findCity(m[2], m[1]);
+      if (city || re.source.includes("\\d{5}")) {
+        out.state = m[2]; out.city = city; out.cityRaw = m[1].trim().split(/\s+/).slice(-3).join(" ");
+        break;
+      }
+    }
+    if (out.state) break;
+  }
+
+  const NUM = String.raw`(\d{1,2},\d{3}|\d{3,4})`;
+  const SQFT = String.raw`(?:sq\.?\s*ft\.?|sqft|square\s+feet|\bsf\b)`;
+  // "1,576 sq ft": the number must not be a price ("$4,091 Square Feet") or the tail of a longer number
+  const sqftRe = new RegExp(String.raw`(?<![\d,.$])(?<!\$\s)` + NUM + String.raw`(?:\s*[-–]\s*` + NUM + String.raw`)?\s*` + SQFT, "gi");
+  // "Square Feet 1,576" in a unit table, where the column name comes first
+  const labelRe = new RegExp(SQFT + String.raw`\s*:?\s*` + NUM + String.raw`(?![\d,])(?!\s*[-–]\s*\d)`, "gi");
+  const bedRe = /\b(studio)\b|\b(\d)\s*(?:bed(?:room)?s?|bd|br)\b/i;
+  const bathRe = /\b(\d(?:\.5)?)\s*(?:bath(?:room)?s?|ba)\b/i;
+  const priceRe = /\$\s?(\d{1,2},\d{3}|\d{3,4})(?![\d,])/;
+
+  const found = [];
+  const addUnit = (index, length, lo, hi, weight) => {
+    if (lo < 150 || lo > 12000) return;
+    const before = t.slice(Math.max(0, index - 140), index);
+    const after = t.slice(index + length, index + length + 100);
+    const b = nearest(bedRe, before, after), ba = nearest(bathRe, before, after), p = nearest(priceRe, before, after);
+    found.push({
+      sqft: hi ? Math.round((lo + hi) / 2) : lo, range: hi ? [lo, hi] : null,
+      beds: b ? (b[1] ? 0 : +b[2]) : null, baths: ba ? +ba[1] : null, price: p ? toNum(p[1]) : null, weight,
+    });
+  };
+  const spans = [];
+  for (const m of t.matchAll(sqftRe)) {
+    spans.push([m.index, m.index + m[0].length]);
+    addUnit(m.index, m[0].length, toNum(m[1]), m[2] ? toNum(m[2]) : null, 2);
+  }
+  for (const m of t.matchAll(labelRe)) {
+    if (spans.some(([a, b]) => m.index >= a && m.index < b)) continue;
+    addUnit(m.index, m[0].length, toNum(m[1]), null, 1);
+  }
+
+  // one entry per floor plan: plans are told apart by size, and plan headings ("2 Beds 2.5 Baths 1,576 sq ft")
+  // count more than unit-table rows when deciding the beds and baths
+  const mode = (g, key) => {
+    const score = new Map();
+    g.forEach(u => { if (u[key] !== null) score.set(u[key], (score.get(u[key]) || 0) + u.weight); });
+    let best = null;
+    score.forEach((s, v) => { if (best === null || s > score.get(best)) best = v; });
+    return best;
+  };
+  const groups = new Map();
+  found.forEach(u => {
+    const k = u.range ? u.range.join("-") : String(u.sqft);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(u);
+  });
+  let units = [...groups.values()].map(g => {
+    const prices = [...new Set(g.map(u => u.price).filter(p => p !== null))].sort((a, b) => a - b);
+    return {
+      sqft: g[0].sqft, range: g[0].range, beds: mode(g, "beds"), baths: mode(g, "baths"),
+      prices, price: prices.length ? prices[Math.floor((prices.length - 1) / 2)] : null,
+    };
+  });
+  if (units.some(u => u.beds !== null)) units = units.filter(u => u.beds !== null || u.baths !== null);
+  if (units.some(u => !u.range)) units = units.filter(u => !u.range);
+  units.sort((a, b) => (a.beds ?? 9) - (b.beds ?? 9) || a.sqft - b.sqft);
+  out.units = units.slice(0, 12);
+
+  // look for amenities only near "Amenities" / "Features" headings, so site menus and footers don't count
+  const heads = [...t.matchAll(/\b(amenities|features)\b/gi)].map(m => m.index);
+  const scope = heads.length ? heads.map(i => t.slice(i, i + 2500)).join("\n") : t;
+  out.amenities = Object.keys(AMENITY_PATTERNS).filter(a => AMENITY_PATTERNS[a].test(scope));
+  return out;
+}
+// ---- end parser ----
+
+function unitLabel(u) {
+  const bed = u.beds === null ? "? bed" : u.beds === 0 ? "Studio" : `${u.beds} bed`;
+  const bath = u.baths === null ? "? bath" : `${u.baths} bath`;
+  const size = u.range ? `${u.range[0].toLocaleString()}–${u.range[1].toLocaleString()} sq ft` : `${u.sqft.toLocaleString()} sq ft`;
+  const p = u.prices;
+  const sub = !p.length ? "No price found"
+    : p.length === 1 ? `Listed ${money(p[0])}`
+    : `Listed ${money(p[0])}–${money(p[p.length - 1])}, ${p.length} units`;
+  return { main: `${bed} · ${bath} · ${size}`, sub };
+}
+
+function applyUnit(u) {
+  $("sqft").value = u.sqft;
+  if (u.beds !== null) $("beds").value = String(Math.min(u.beds, 5));
+  if (u.baths !== null) {
+    const opts = [...$("baths").options].map(o => +o.value);
+    $("baths").value = String(opts.reduce((a, b) => Math.abs(b - u.baths) < Math.abs(a - u.baths) ? b : a));
+  }
+  $("listed-in").value = u.price ?? "";
+}
+
+function runParse() {
+  const text = $("paste").value;
+  const box = $("found");
+  if (!text.trim()) { box.hidden = true; return; }
+  const r = parseListing(text);
+  const foundFees = parseFees(text);
+  // each paste only fills in what it contains, so pasting a fee tab later keeps the location and unit
+  const listingText = !!(r.state || r.units.length);
+  const lines = [], kept = [];
+
+  if (r.state) {
+    $("state").value = r.state; fillCities();
+    $("city").value = r.city || r.cityRaw || "";
+    lines.push(`<div><strong>Location:</strong> ${esc(r.city || r.cityRaw || "city not found")}, ${esc(r.state)} (${esc(M.state_stats[r.state].segment)} segment)</div>`);
+  } else kept.push("location");
+
+  if (listingText && r.amenities.length) {
+    document.querySelectorAll("#chips input").forEach(el => { el.checked = r.amenities.includes(el.value); });
+    lines.push(`<div><strong>Amenities:</strong> ${esc(r.amenities.join(", "))}</div>`);
+  } else kept.push("amenities");
+
+  if (r.units.length) {
+    $("listed-in").value = "";
+    applyUnit(r.units[0]);
+    const many = r.units.length > 1;
+    lines.push(`<div><strong>${many ? `${r.units.length} unit types found.` : "Unit found."}</strong>${many ? " The first one is filled in. Choose the one you want:" : ""}</div>`);
+    lines.push(`<div class="units">${r.units.map((u, i) => {
+      const l = unitLabel(u);
+      return `<button type="button" class="unit" data-i="${i}" aria-pressed="${i === 0}">${esc(l.main)}<small>${esc(l.sub)}</small></button>`;
+    }).join("")}</div>`);
+  } else kept.push("unit and rent");
+
+  if (foundFees.length) {
+    const { added, skipped } = addFees(foundFees);
+    lines.push(`<div><strong>Fees:</strong> added ${added} ${added === 1 ? "fee" : "fees"}${skipped ? `, skipped ${skipped} already in the list` : ""}. Check them in the Fees section.</div>`);
+  }
+  if (kept.length) lines.push(`<div>Not in this text, so left as before: ${kept.join(", ")}.</div>`);
+
+  lastParsedText = text;
+  box.innerHTML = lines.join("");
+  box.hidden = false;
+  box.querySelectorAll(".unit").forEach(btn => btn.addEventListener("click", () => {
+    applyUnit(r.units[+btn.dataset.i]);
+    box.querySelectorAll(".unit").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+    update();
+  }));
+  update();
+}
+
+const getJSON = p => fetch(p).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+Promise.all([getJSON("model.json"), getJSON("rent_index.json"), getJSON("benchmarks.json"), getJSON("listings.json")])
+  .then(([m, r, t, l]) => { M = m; R = r; T = t; LS = l; setup(); })
+  .catch(() => { $("load-error").hidden = false; });
+</script>
