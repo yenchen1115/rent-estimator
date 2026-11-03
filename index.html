@@ -169,6 +169,8 @@ textarea:focus-visible, .btn:focus-visible, .unit:focus-visible { outline: 2px s
 .deal-list ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; }
 .deal-list li strong { font-variant-numeric: tabular-nums; }
 .deal-list li.none { list-style: none; margin-left: -18px; color: var(--muted); }
+.deal-list li.more summary { cursor: pointer; color: var(--accent); font-size: 13.5px; }
+.deal-list li.more ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink); }
 #neg li::marker { color: var(--warn-ink); }
 #pros li::marker { color: var(--good); }
 .counter { margin: 0; font-size: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
@@ -829,7 +831,8 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
     if (!items.length) return `<li class="none">${empty}</li>`;
     const more = items.length - 5;
     return items.slice(0, 5).map(([, t]) => `<li>${t}</li>`).join("")
-      + (more > 0 ? `<li class="none">and ${more} smaller ${more === 1 ? "point" : "points"}</li>` : "");
+      + (more > 0 ? `<li class="none more"><details><summary>Show ${more} smaller ${more === 1 ? "point" : "points"}</summary>` +
+        `<ul>${items.slice(5).map(([, t]) => `<li>${t}</li>`).join("")}</ul></details></li>` : "");
   };
   // what the first list shows depends on the verdict: arguing the rent down only makes sense above the estimate
   const suspicious = !!listed && listed < lo * 0.8;
