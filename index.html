@@ -263,7 +263,8 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
             <datalist id="city-list"></datalist>
           </div>
         </div>
-        <div class="hint">The model places a listing by its state and that state's market segment. The city is shown on the estimate but doesn't change it.</div>
+        <div class="hint">The estimate depends on the state, not the city. The city is used to compare with local rents.</div>
+        <div class="hint" id="table-note" hidden></div>
       </fieldset>
 
       <fieldset>
@@ -458,7 +459,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
         <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
         <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which only knows the state, can't separate them from the building.</li>
         <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state or market segment.</li>
-        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state.</li>
+        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
         <li><strong>Move-in specials</strong>: free weeks and one-time discounts are spread over the lease to give the rent after specials, which is what the verdict uses.</li>
         <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
         <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
@@ -571,7 +572,7 @@ function fillCities() {
 
 function setup() {
   const states = Object.keys(M.state_stats).sort((a, b) => (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b));
-  $("state").innerHTML = states.map(s => `<option value="${s}">${STATE_NAMES[s] || s} (${s}) · ${M.state_stats[s].segment}</option>`).join("");
+  $("state").innerHTML = states.map(s => `<option value="${s}">${STATE_NAMES[s] || s} (${s})</option>`).join("");
   $("chips").innerHTML = M.amenities.map((a, i) =>
     `<label class="chip"><input type="checkbox" id="am-${i}" value="${esc(a)}"><span>${esc(a)}</span></label>`).join("");
 
@@ -661,7 +662,7 @@ function update() {
   }
   if (!forests[seg]) {
     $("est").innerHTML = "…<small>/ month</small>";
-    $("range").textContent = `Loading the ${seg} segment model (first time only)…`;
+    $("range").textContent = "Loading the model for this state (first time only)…";
     loadSegment(seg).then(update).catch(() => { $("load-error").hidden = false; });
     return;
   }
@@ -784,7 +785,19 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const cityText = $("city").value.trim();
   const city = cityText ? findCity(s, cityText) : null;
   const cityRow = city ? T.by_city[`${s}|${city}|${beds}`] : null;
-  if (cityRow && listed) {
+  const norm = v => (v || "").toLowerCase().replace(/[^a-z]/g, "");
+  // an empty city field takes the table's city, so pasting only the table and the unit still works
+  const tableFits = !!rentTable && (!rentTable.city || !cityText || [cityText, city].some(c => norm(c) === norm(rentTable.city)));
+  renderTableNote(tableFits);
+  const tableAvg = tableFits ? rentTable.rows[beds] : null;
+  if (tableAvg && listed) {
+    const where = rentTable.city || city || cityText;
+    const d = listed / tableAvg - 1;
+    const detail = `the average ${esc(bedLabel)} in ${esc(where)} on the listing site (${money(tableAvg)}${rentTable.updated ? `, updated ${esc(rentTable.updated)}` : ""})`;
+    if (d > 0.05) talk.local = { city: where, price: tableAvg };
+    if (d > 0.05) neg.push([listed - tableAvg, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> above ${detail}.`, "price"]);
+    else if (d < -0.05) pros.push([tableAvg - listed, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> below ${detail}. Averages run above a typical rent, since a few expensive units pull them up.`]);
+  } else if (cityRow && listed) {
     const local = cityRow.median * mult, d = listed / local - 1;
     const detail = `the typical ${esc(bedLabel)} in ${esc(city)} (${money(round10(local))}, median of ${cityRow.n} listings, adjusted to ${R.target_period.slice(0, 4)})`;
     if (d > 0.05) talk.local = { city, price: local };
@@ -1038,6 +1051,7 @@ function niceStep(raw) {
 const FEE_GROUPS = { required: "Required", pets: "Pets", parking: "Parking", addons: "Add-ons", situational: "Only if it applies" };
 const FEE_KINDS = { monthly: "per month", once: "one-time", moveout: "at move-out", deposit: "refundable deposit", varies: "varies" };
 const fees = [];
+let rentTable = null;
 const feeCount = { pets: false, parking: false, addons: false };
 
 // a heading must be the whole line, so fee names such as "Utility - Sewer" or "Monthly Pet Rent" aren't mistaken for one
@@ -1313,6 +1327,34 @@ function parseListing(text) {
   out.amenities = Object.keys(AMENITY_PATTERNS).filter(a => AMENITY_PATTERNS[a].test(scope));
   return out;
 }
+// a listing site's city rent table ("How much does it cost to rent an apartment in New York?"): average rent by bedroom count
+function parseRentTable(text) {
+  const t = text.replace(/\s+/g, " ");
+  if (!/average rent/i.test(t)) return null;
+  const rows = {};
+  let filtered = false;
+  for (const m of t.matchAll(/\b(studio|(\d+) bedroom)\b([^$]{0,40}?)\$\s?([\d,]+)\+?\s+\$\s?[\d,]+\+?\s+\$\s?[\d,]+\+?/gi)) {
+    const beds = m[2] ? +m[2] : 0;
+    if (beds in rows) continue;
+    rows[beds] = toNum(m[4]);
+    if (/\bwith\b/i.test(m[3])) filtered = true;
+  }
+  if (Object.keys(rows).length < 2) return null;
+  const city = (t.match(/cost to rent an apartment in ([A-Za-z .'-]{2,40}?)\?/i) || [])[1] || null;
+  const updated = (t.match(/prices updated ([A-Za-z]+ \d{1,2}, \d{4})/i) || [])[1] || null;
+  return { city, updated, rows, filtered };
+}
+
+function renderTableNote(applies = true) {
+  const note = $("table-note");
+  note.hidden = !rentTable;
+  if (!rentTable) return;
+  note.innerHTML = `Rent table pasted${rentTable.city ? ` for ${esc(rentTable.city)}` : ""}${rentTable.updated ? `, updated ${esc(rentTable.updated)}` : ""}. ` +
+    (applies ? "It's used for the location comparison. "
+      : `It isn't used, because the city above isn't ${esc(rentTable.city)}. `) +
+    `<button type="button" class="linkbtn" id="table-clear">Remove table</button>`;
+  $("table-clear").addEventListener("click", () => { rentTable = null; renderTableNote(); update(); });
+}
 // ---- end parser ----
 
 function unitLabel(u) {
@@ -1342,6 +1384,7 @@ function runParse() {
   if (!text.trim()) { box.hidden = true; return; }
   const r = parseListing(text);
   const foundFees = parseFees(text);
+  const table = parseRentTable(text);
   // each paste only fills in what it contains, so pasting a fee tab later keeps the location and unit
   const listingText = !!(r.state || r.units.length);
   const lines = [], kept = [];
@@ -1349,7 +1392,7 @@ function runParse() {
   if (r.state) {
     $("state").value = r.state; fillCities();
     $("city").value = r.city || r.cityRaw || "";
-    lines.push(`<div><strong>Location:</strong> ${esc(r.city || r.cityRaw || "city not found")}, ${esc(r.state)} (${esc(M.state_stats[r.state].segment)} segment)</div>`);
+    lines.push(`<div><strong>Location:</strong> ${esc(r.city || r.cityRaw || "city not found")}, ${esc(r.state)}</div>`);
   } else kept.push("location");
 
   if (listingText && r.amenities.length) {
@@ -1371,6 +1414,11 @@ function runParse() {
   if (foundFees.length) {
     const { added, skipped } = addFees(foundFees);
     lines.push(`<div><strong>Fees:</strong> added ${added} ${added === 1 ? "fee" : "fees"}${skipped ? `, skipped ${skipped} already in the list` : ""}. Check them in the Fees section.</div>`);
+  }
+  if (table) {
+    rentTable = table;
+    lines.push(`<div><strong>Rent table:</strong> average rent for ${Object.keys(table.rows).length} bedroom counts${table.city ? ` in ${esc(table.city)}` : ""}${table.updated ? `, updated ${esc(table.updated)}` : ""}. It replaces the 2018–19 city median in the location comparison.</div>`);
+    if (table.filtered) lines.push(`<div>This table is filtered by an amenity. The table for all apartments works better, because the model already accounts for amenities.</div>`);
   }
   if (kept.length) lines.push(`<div>Not in this text, so left as before: ${kept.join(", ")}.</div>`);
 
