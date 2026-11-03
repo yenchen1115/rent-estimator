@@ -441,9 +441,9 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       <summary>How the verdict and negotiation points work</summary>
       <ul>
         <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to 3% above the estimate is a fair price; above that but inside the range leaves room to negotiate; above the range is more than the model expects.</li>
-        <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead.</li>
+        <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states by rent per square foot.</li>
         <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
-        <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly.</li>
+        <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym come mostly with newer, larger buildings in pricier areas, and the model, which only knows the state, can't separate the amenity from the building.</li>
         <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state or market segment.</li>
         <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state.</li>
         <li><strong>Move-in specials</strong>: free weeks and one-time discounts are spread over the lease to give the rent after specials, which is what the verdict uses.</li>
@@ -683,7 +683,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const priceWord = hasSpecials ? "Rent after specials" : "Listed rent";
   const stateName = STATE_NAMES[s] || s;
   let b = T.by_state[`${s}|${beds}`], bName = `${bedLabel} listings in ${stateName}`;
-  if (!b || b.n < T.min_n) { b = T.by_segment[`${seg}|${beds}`]; bName = `${bedLabel} listings in ${seg}-segment states`; }
+  if (!b || b.n < T.min_n) { b = T.by_segment[`${seg}|${beds}`]; bName = `${bedLabel} listings in states with similar rent levels`; }
   const neg = [], pros = [], fine = [];
   const talk = { missing: [], size: false, baths: false, days: 0, local: null };
   let verdictCls = null;
@@ -731,14 +731,20 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   // steadier than changing one feature on this unit alone
   if (b) {
     const { eff, sample } = amenityEffects(s, seg, beds);
+    // above 5% of the estimate an amenity's effect mostly reflects the kind of building it comes with, so no amount is shown
+    const amenCap = est * 0.05;
     M.amenities.filter(a => !amen.includes(a)).forEach(a => {
       const sh = b.amen[a] || 0, gain = eff[a] * mult;
       if (sh >= 0.25 && gain >= minGain) talk.missing.push([gain, a]);
-      if (sh >= 0.25 && gain >= minGain) neg.push([gain, `${esc(a)} isn't mentioned: ${share(sh)} of ${esc(bName)} mention it, and on average similar units with it are estimated <strong>${money(gain)}/mo</strong> higher. Ask whether it's available.`, "amenity"]);
+      if (sh >= 0.25 && gain >= minGain) neg.push([Math.min(gain, amenCap), gain > amenCap
+        ? `${esc(a)} isn't mentioned: ${share(sh)} of ${esc(bName)} mention it. Listings with it are often in pricier buildings, so the model can't tell how much it adds on its own. Ask whether it's available.`
+        : `${esc(a)} isn't mentioned: ${share(sh)} of ${esc(bName)} mention it, and on average similar units with it are estimated <strong>${money(gain)}/mo</strong> higher. Ask whether it's available.`, "amenity"]);
     });
     amen.forEach(a => {
       const sh = b.amen[a] || 0, gain = eff[a] * mult;
-      if (gain >= minGain) pros.push([gain, `Has ${esc(a)}: ${sh < 0.5 ? "only " : ""}${share(sh)} of ${esc(bName)} mention it. On average it adds about <strong>${money(gain)}/mo</strong> for similar units.`]);
+      if (gain >= minGain) pros.push([Math.min(gain, amenCap), gain > amenCap
+        ? `Has ${esc(a)}: ${sh < 0.5 ? "only " : ""}${share(sh)} of ${esc(bName)} mention it. Listings with it are often in pricier buildings, so the model can't tell how much it adds on its own.`
+        : `Has ${esc(a)}: ${sh < 0.5 ? "only " : ""}${share(sh)} of ${esc(bName)} mention it. On average it adds about <strong>${money(gain)}/mo</strong> for similar units.`]);
     });
 
     const sizeGain = avgEffect(sample, u => [{ ...u, sqft: b.sqft }, { ...u, sqft }]) * mult;
@@ -943,7 +949,7 @@ function similarPrices(s, seg, beds, sqft, city, bedLabel, stateName) {
   const tries = [
     cityIdx >= 0 ? [st.rows.filter(r => inBand(r) && r[4] === cityIdx), `${bedLabel} listings of ${size} in ${city}`] : null,
     [st.rows.filter(inBand), `${bedLabel} listings of ${size} in ${stateName}`],
-    [segRows.filter(inBand), `${bedLabel} listings of ${size} in ${seg}-segment states`],
+    [segRows.filter(inBand), `${bedLabel} listings of ${size} in states with similar rent levels`],
     [st.rows.filter(r => r[0] === beds), `all ${bedLabel} listings in ${stateName}, any size`],
   ].filter(Boolean);
   const hit = tries.find(([rows]) => rows.length >= T.min_n);
