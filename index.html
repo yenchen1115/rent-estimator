@@ -789,7 +789,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const cityRow = city ? T.by_city[`${s}|${city}|${beds}`] : null;
   const norm = v => (v || "").toLowerCase().replace(/[^a-z]/g, "");
   // an empty city field takes the table's city, so pasting only the table and the unit still works
-  const tableFits = !!rentTable && (!rentTable.city || !cityText || [cityText, city].some(c => norm(c) === norm(rentTable.city)));
+  const tableFits = !!rentTable && (!cityText || [cityText, city].some(c => norm(c) === norm(rentTable.city)));
   renderTableNote(tableFits);
   const tableAvg = tableFits ? rentTable.rows[beds] : null;
   if (tableAvg && listed) {
@@ -1334,16 +1334,20 @@ function parseListing(text) {
 function parseRentTable(text) {
   const t = text.replace(/\s+/g, " ");
   if (!/average rent/i.test(t)) return null;
-  const rows = {};
+  const rows = {}, prefixes = {};
   let filtered = false;
   for (const m of t.matchAll(/\b(studio|(\d+) bedroom)\b([^$]{0,40}?)\$\s?([\d,]+)\+?\s+\$\s?[\d,]+\+?\s+\$\s?[\d,]+\+?/gi)) {
     const beds = m[2] ? +m[2] : 0;
     if (beds in rows) continue;
     rows[beds] = toNum(m[4]);
+    // rows are named after the city ("New York 1 Bedroom Apartments"), which names the table when its heading wasn't copied
+    const pre = (t.slice(Math.max(0, m.index - 40), m.index).match(/((?:[A-Z][A-Za-z.'-]*\s){1,4})$/) || [])[1];
+    if (pre) prefixes[pre.trim()] = (prefixes[pre.trim()] || 0) + 1;
     if (/\bwith\b/i.test(m[3])) filtered = true;
   }
   if (Object.keys(rows).length < 2) return null;
-  const city = (t.match(/cost to rent an apartment in ([A-Za-z .'-]{2,40}?)\?/i) || [])[1] || null;
+  const common = Object.entries(prefixes).sort((a, b) => b[1] - a[1])[0];
+  const city = (t.match(/cost to rent an apartment in ([A-Za-z .'-]{2,40}?)\?/i) || [])[1] || (common && common[1] >= 2 ? common[0] : null);
   const updated = (t.match(/prices updated ([A-Za-z]+ \d{1,2}, \d{4})/i) || [])[1] || null;
   return { city, updated, rows, filtered };
 }
@@ -1418,9 +1422,11 @@ function runParse() {
     const { added, skipped } = addFees(foundFees);
     lines.push(`<div><strong>Fees:</strong> added ${added} ${added === 1 ? "fee" : "fees"}${skipped ? `, skipped ${skipped} already in the list` : ""}. Check them in the Fees section.</div>`);
   }
-  if (table) {
+  if (table && !table.city) {
+    lines.push(`<div><strong>Rent table:</strong> found, but not which city it's for, so it isn't used. Copy the table together with its heading, such as "How much does it cost to rent an apartment in New York?".</div>`);
+  } else if (table) {
     rentTable = table;
-    lines.push(`<div><strong>Rent table:</strong> average rent for ${Object.keys(table.rows).length} bedroom counts${table.city ? ` in ${esc(table.city)}` : ""}${table.updated ? `, updated ${esc(table.updated)}` : ""}. It replaces the 2018–19 city median in the location comparison.</div>`);
+    lines.push(`<div><strong>Rent table:</strong> average rent for ${(([lo, hi]) => `${lo ? `${lo}-bedroom` : "studio"} to ${hi}-bedroom apartments`)([Math.min(...Object.keys(table.rows)), Math.max(...Object.keys(table.rows))])}${table.city ? ` in ${esc(table.city)}` : ""}${table.updated ? `, updated ${esc(table.updated)}` : ""}. It replaces the 2018–19 city median in the location comparison.</div>`);
     if (table.filtered) lines.push(`<div>This table is filtered by an amenity. The table for all apartments works better, because the model already accounts for amenities.</div>`);
   }
   if (kept.length) lines.push(`<div>Not in this text, so left as before: ${kept.join(", ")}.</div>`);
