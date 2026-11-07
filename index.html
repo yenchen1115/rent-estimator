@@ -446,8 +446,8 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
         </table>
       </div>
       <ul>
-        <li>This page runs the team's final models unchanged: <code>RandomForestRegressor(random_state=0)</code> with default settings, 100 fully grown trees per segment, trained on all listings in the segment. The page downloads only the segment of the state you choose, once per visit.</li>
-        <li>The R² column is the 5-fold cross-validation score from the notebook, recomputed with the same code.</li>
+        <li>This page runs the team's final tuned models unchanged: <code>RandomForestRegressor(random_state=0)</code> with 100 fully grown trees per segment, trained on all listings in the segment. Grid search with 5-fold cross-validation picked <code>min_samples_leaf=1</code> for every segment and <code>max_features</code> of 8 (High), 8 (Medium) and 6 (Low): each split considers only that many randomly chosen inputs, which makes the trees more varied and the average more accurate. The page downloads only the segment of the state you choose, once per visit.</li>
+        <li>The R² column is the 5-fold cross-validation score of the tuned models from the notebook, recomputed with the same code. With default settings it was 0.4639 (High), 0.5880 (Medium) and 0.6693 (Low).</li>
         <li>The 80% range comes from the cross-validated errors in each segment: 8 in 10 real rents fell inside it. It is wider in the High segment, where rents vary the most.</li>
         <li>"What each amenity changes here" compares the estimate with and without that amenity for this specific unit. These are associations in the data, not the value an amenity adds.</li>
         <li>The model was trained on asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com.</li>
