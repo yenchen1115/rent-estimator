@@ -107,6 +107,7 @@ textarea:focus-visible, .btn:focus-visible, .unit:focus-visible { outline: 2px s
 }
 .found { font-size: 13px; color: var(--muted); display: grid; gap: 8px; }
 .found strong { color: var(--ink); font-weight: 600; }
+.found .warn-line, .found .warn-line strong { color: var(--warn-ink); }
 .units { display: flex; flex-wrap: wrap; gap: 8px; }
 .unit {
   font: inherit; font-size: 13px; text-align: left; cursor: pointer;
@@ -197,6 +198,9 @@ textarea:focus-visible, .btn:focus-visible, .unit:focus-visible { outline: 2px s
 .fee-fixed { color: var(--ink); }
 .fee-manual summary { cursor: pointer; font-size: 13.5px; color: var(--accent); }
 .fee-manual .row { margin: 10px 0; }
+.pair { display: flex; gap: 6px; }
+.pair input { flex: 1; min-width: 0; }
+.pair select { width: auto; }
 .summary-box { display: grid; gap: 8px; }
 #summary-text { min-height: 180px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; background: var(--surface); }
 .pct svg text.row-label { font-family: var(--font-body); font-size: 12.5px; fill: var(--ink); font-weight: 500; }
@@ -309,8 +313,11 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
         <div class="hint">Enter the rent shown on the listing to see whether the unit is worth it and where to negotiate.</div>
         <div class="row">
           <div class="field">
-            <label for="free-in">Free weeks</label>
-            <input id="free-in" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+            <label for="free-in">Free rent</label>
+            <div class="pair">
+              <input id="free-in" type="number" min="0" step="0.5" inputmode="decimal" placeholder="0">
+              <select id="free-unit" aria-label="Free rent unit"><option value="weeks">weeks</option><option value="months">months</option></select>
+            </div>
           </div>
           <div class="field">
             <label for="discount-in">One-time discount, $</label>
@@ -462,7 +469,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
         <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which only knows the state, can't separate them from the building.</li>
         <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state or market segment.</li>
         <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
-        <li><strong>Move-in specials</strong>: free weeks and one-time discounts are spread over the lease to give the rent after specials, which is what the verdict uses.</li>
+        <li><strong>Move-in specials</strong>: free weeks or months and one-time discounts are spread over the lease to give the net effective rent, which is what the verdict uses.</li>
         <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
         <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
         <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
@@ -523,6 +530,7 @@ const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;"
 const money = v => "$" + Math.round(v).toLocaleString("en-US");
 const round10 = v => Math.round(v / 10) * 10;
 const signedPct = r => (r >= 0 ? "+" : "−") + Math.abs(r * 100).toFixed(1) + "%";
+const pct = r => Math.abs(r * 100).toFixed(1) + "%";
 
 function loadSegment(seg) {
   if (!loading[seg]) {
@@ -566,6 +574,13 @@ function predict(inp) {
   inp.amen.forEach(a => { vals[`remainder__${a}`] = 1; });
   return forestRaw(F, F.features.map(f => vals[f] ?? 0));
 }
+
+// "New York" is both a state and a city, so the state gets "State" and the city gets "City"
+const placeName = s => { const n = STATE_NAMES[s] || s; return (M.cities_by_state[s] || []).includes(n) ? `${n} State` : n; };
+const cityName = (s, c) => c && c === (STATE_NAMES[s] || s) ? `${c} City` : c;
+// New York City's boroughs and neighbourhoods use the city's rent table
+const NYC_PARTS = /^(manhattan|brooklyn|queens|(the )?bronx|staten island|astoria|long island city|harlem|east harlem|flushing|jamaica|williamsburg|bushwick|greenpoint|east village|west village|upper (east|west) side|chelsea|tribeca|soho)$/i;
+const tableCity = (s, c) => s === "NY" && NYC_PARTS.test((c || "").trim()) ? "New York" : c;
 
 function fillCities() {
   const list = M.cities_by_state[$("state").value] || [];
@@ -690,14 +705,15 @@ function update() {
 function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft, amen, bedLabel }) {
   const num = id => Math.max(0, parseFloat($(id).value) || 0);
   const listedRaw = getListed();
-  const lease = Math.max(1, num("lease-in") || 12), freeWeeks = num("free-in"), oneTime = num("discount-in"), days = num("days-in");
+  const lease = Math.max(1, num("lease-in") || 12), freeN = num("free-in"), oneTime = num("discount-in"), days = num("days-in");
+  const freeUnit = $("free-unit").value === "months" ? "month" : "week";
   const ft = feeTotals(lease);
-  const freeValue = listedRaw ? listedRaw * 12 / 52 * freeWeeks : 0;
-  const hasSpecials = !!listedRaw && (freeWeeks > 0 || oneTime > 0);
+  const freeValue = !listedRaw ? 0 : freeUnit === "month" ? listedRaw * freeN : listedRaw * 12 / 52 * freeN;
+  const hasSpecials = !!listedRaw && (freeN > 0 || oneTime > 0);
   // with specials, the verdict and comparisons use the average monthly rent over the lease
   const listed = listedRaw ? (listedRaw * lease - freeValue - oneTime) / lease : null;
-  const priceWord = hasSpecials ? "Rent after specials" : "Listed rent";
-  const stateName = STATE_NAMES[s] || s;
+  const priceWord = hasSpecials ? "Net effective rent" : "Listed rent";
+  const stateName = placeName(s);
   let b = T.by_state[`${s}|${beds}`], bName = `${bedLabel} listings in ${stateName}`;
   if (!b || b.n < T.min_n) { b = T.by_segment[`${seg}|${beds}`]; bName = `${bedLabel} listings in states with similar rent levels`; }
   const neg = [], pros = [], fine = [];
@@ -711,10 +727,10 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   if (!costs.hidden) {
     const rows = [];
     if (hasSpecials) {
-      const weeks = `${freeWeeks} free ${freeWeeks === 1 ? "week" : "weeks"}`;
-      const parts = [freeWeeks ? weeks : null, oneTime ? `a ${money(oneTime)} discount` : null].filter(Boolean).join(" and ");
-      const formula = `(${money(listedRaw)} × ${lease}${freeWeeks ? ` − ${money(freeValue)} for ${weeks}` : ""}${oneTime ? ` − ${money(oneTime)}` : ""}) ÷ ${lease}`;
-      rows.push(`<div class="cost-row"><span>Rent after specials</span><strong>${money(listed)}<small> / month</small></strong></div>` +
+      const weeks = `${freeN} free ${freeN === 1 ? freeUnit : freeUnit + "s"}`;
+      const parts = [freeN ? weeks : null, oneTime ? `a ${money(oneTime)} discount` : null].filter(Boolean).join(" and ");
+      const formula = `(${money(listedRaw)} × ${lease}${freeN ? ` − ${money(freeValue)} for ${weeks}` : ""}${oneTime ? ` − ${money(oneTime)}` : ""}) ÷ ${lease}`;
+      rows.push(`<div class="cost-row"><span>Net effective rent</span><strong>${money(listed)}<small> / month</small></strong></div>` +
         `<p class="cost-note">Average per month over a ${lease}-month lease, after ${parts}. ${formula}</p>`);
     }
     if (fees.length) {
@@ -766,9 +782,9 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
     const sizeGain = avgEffect(sample, u => [{ ...u, sqft: b.sqft }, { ...u, sqft }]) * mult;
     if (sqft < b.sqft * 0.9 && sizeGain >= minGain) {
       talk.size = true;
-      neg.push([sizeGain, `Smaller than usual: ${sqft.toLocaleString()} sq ft vs. ${b.sqft.toLocaleString()} sq ft typical for ${esc(bName)}. On average, similar units are estimated <strong>${money(sizeGain)}/mo</strong> higher at the typical size.`, "price"]);
+      neg.push([sizeGain, `Smaller than usual: ${sqft.toLocaleString()} sq ft vs. ${Math.round(b.sqft).toLocaleString()} sq ft typical for ${esc(bName)}. On average, similar units are estimated <strong>${money(sizeGain)}/mo</strong> higher at the typical size.`, "price"]);
     } else if (sqft > b.sqft * 1.1 && -sizeGain >= minGain) {
-      pros.push([-sizeGain, `Larger than usual: ${sqft.toLocaleString()} sq ft vs. ${b.sqft.toLocaleString()} sq ft typical for ${esc(bName)}. On average the extra space adds about <strong>${money(-sizeGain)}/mo</strong> for similar units.`]);
+      pros.push([-sizeGain, `Larger than usual: ${sqft.toLocaleString()} sq ft vs. ${Math.round(b.sqft).toLocaleString()} sq ft typical for ${esc(bName)}. On average the extra space adds about <strong>${money(-sizeGain)}/mo</strong> for similar units.`]);
     }
 
     const bathGain = avgEffect(sample, u => [{ ...u, baths: b.baths }, { ...u, baths }]) * mult;
@@ -789,24 +805,25 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const cityRow = city ? T.by_city[`${s}|${city}|${beds}`] : null;
   const norm = v => (v || "").toLowerCase().replace(/[^a-z]/g, "");
   // an empty city field takes the table's city, so pasting only the table and the unit still works
-  const tableFits = !!rentTable && (!cityText || [cityText, city].some(c => norm(c) === norm(rentTable.city)));
+  const tableFits = !!rentTable && (!cityText || [cityText, city].some(c => norm(tableCity(s, c)) === norm(rentTable.city)));
+  const citywide = tableFits && cityText && norm(tableCity(s, cityText)) !== norm(cityText);
   renderTableNote(tableFits);
   const tableAvg = tableFits ? rentTable.rows[beds] : null;
   if (tableAvg && listed) {
-    const where = rentTable.city || city || cityText;
+    const where = cityName(s, rentTable.city || city || cityText);
     const d = listed / tableAvg - 1;
-    const detail = `the average ${esc(bedLabel)} in ${esc(where)} on the listing site (${money(tableAvg)}${rentTable.updated ? `, updated ${esc(rentTable.updated)}` : ""})`;
+    const detail = `the ${citywide ? "citywide " : ""}average ${esc(bedLabel)} in ${esc(where)} on the listing site (${money(tableAvg)}${rentTable.updated ? `, updated ${esc(rentTable.updated)}` : ""})`;
     if (d > 0.05) talk.local = { city: where, price: tableAvg };
-    if (d > 0.05) neg.push([listed - tableAvg, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> above ${detail}.`, "price"]);
-    else if (d < -0.05) pros.push([tableAvg - listed, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> below ${detail}. Averages run above a typical rent, since a few expensive units pull them up.`]);
+    if (d > 0.05) neg.push([listed - tableAvg, `Location: ${priceWord.toLowerCase()} is <strong>${pct(d)}</strong> above ${detail}.`, "price"]);
+    else if (d < -0.05) pros.push([tableAvg - listed, `Location: ${priceWord.toLowerCase()} is <strong>${pct(d)}</strong> below ${detail}. Averages run above a typical rent, since a few expensive units pull them up.`]);
   } else if (cityRow && listed) {
     const local = cityRow.median * mult, d = listed / local - 1;
-    const detail = `the typical ${esc(bedLabel)} in ${esc(city)} (${money(round10(local))}, median of ${cityRow.n} listings, adjusted to ${R.target_period.slice(0, 4)})`;
-    if (d > 0.05) talk.local = { city, price: local };
-    if (d > 0.05) neg.push([listed - local, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> above ${detail}.`, "price"]);
-    else if (d < -0.05) pros.push([local - listed, `Location: ${priceWord.toLowerCase()} is <strong>${signedPct(d)}</strong> below ${detail}.`]);
+    const detail = `the typical ${esc(bedLabel)} in ${esc(cityName(s, city))} (${money(round10(local))}, median of ${cityRow.n} listings, adjusted to ${R.target_period.slice(0, 4)})`;
+    if (d > 0.05) talk.local = { city: cityName(s, city), price: local };
+    if (d > 0.05) neg.push([listed - local, `Location: ${priceWord.toLowerCase()} is <strong>${pct(d)}</strong> above ${detail}.`, "price"]);
+    else if (d < -0.05) pros.push([local - listed, `Location: ${priceWord.toLowerCase()} is <strong>${pct(d)}</strong> below ${detail}.`]);
   } else if (cityText && !cityRow) {
-    fine.push(`There aren't enough ${bedLabel} listings in ${city || cityText} for a local price comparison.`);
+    fine.push(`There aren't enough ${bedLabel} listings in ${cityName(s, city || cityText)} for a local price comparison.`);
   }
 
   // similar listings for the scale: same bedrooms and size within 20%, in the city if it has enough, then the state
@@ -892,14 +909,15 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   questions.push("When is the unit available, and what lease lengths do you offer?");
 
   if (verdictCls === "warn" || verdictCls === "bad") {
+    const ask = round10(talk.local ? talk.local.price : est);
     const market = talk.local
-      ? `From what I've seen, similar ${bedLabel} units in ${talk.local.city} rent for around ${money(round10(talk.local.price))}.`
-      : `From what I've seen, similar units in the area rent for around ${money(round10(est))}.`;
+      ? `From what I've seen, similar ${bedLabel} units in ${talk.local.city} rent for around ${money(ask)}.`
+      : `From what I've seen, similar units in the area rent for around ${money(ask)}.`;
     const traits = [talk.size ? `is a bit smaller than most ${bedLabel} units` : null,
       talk.baths ? "has fewer bathrooms than most" : null,
       talk.days ? `has been listed for ${talk.days} days` : null].filter(Boolean);
     const traitText = traits.length ? ` This one ${traits.length > 1 ? `${traits.slice(0, -1).join(", ")} and ${traits[traits.length - 1]}` : traits[0]}.` : "";
-    asks.push(`${market}${traitText} Would you consider ${money(round10(est))} a month?`);
+    asks.push(`${market}${traitText} Would you consider ${money(ask)} a month?`);
   }
   if (verdictCls && verdictCls !== "good" && verdictCls !== "warn-low") {
     ft.big.slice(0, 2).forEach(f => asks.push(f.kind === "monthly"
@@ -980,7 +998,7 @@ function similarPrices(s, seg, beds, sqft, city, bedLabel, stateName) {
   const cityIdx = city ? st.cities.indexOf(city) : -1;
   const segRows = M.segments[seg].states.flatMap(x => LS.states[x] ? LS.states[x].rows : []);
   const tries = [
-    cityIdx >= 0 ? [st.rows.filter(r => inBand(r) && r[4] === cityIdx), `${bedLabel} listings of ${size} in ${city}`] : null,
+    cityIdx >= 0 ? [st.rows.filter(r => inBand(r) && r[4] === cityIdx), `${bedLabel} listings of ${size} in ${cityName(s, city)}`] : null,
     [st.rows.filter(inBand), `${bedLabel} listings of ${size} in ${stateName}`],
     [segRows.filter(inBand), `${bedLabel} listings of ${size} in states with similar rent levels`],
     [st.rows.filter(r => r[0] === beds), `all ${bedLabel} listings in ${stateName}, any size`],
@@ -1142,7 +1160,6 @@ function addFees(list) {
     if (fees.some(g => feeKey(g) === feeKey(f))) { skipped++; return; }
     const twin = f.kind !== "varies" && fees.find(g => g.amount === f.amount && g.kind === f.kind && feeStem(g) === feeStem(f));
     fees.push({ ...f, twin: twin ? twin.name : null });
-    if (f.group in feeCount && f.group !== "addons") feeCount[f.group] = true;
     added++;
   });
   renderFees();
@@ -1267,7 +1284,7 @@ function parseListing(text) {
   }
 
   const NUM = String.raw`(\d{1,2},\d{3}|\d{3,4})`;
-  const SQFT = String.raw`(?:sq\.?\s*ft\.?|sqft|square\s+feet|\bsf\b)`;
+  const SQFT = String.raw`(?:sq\.?\s*ft\.?|sqft|square\s+feet|\bsf\b|ft²|ft2\b)`;
   // "1,576 sq ft": the number must not be a price ("$4,091 Square Feet") or the tail of a longer number
   const sqftRe = new RegExp(String.raw`(?<![\d,.$])(?<!\$\s)` + NUM + String.raw`(?:\s*[-–]\s*` + NUM + String.raw`)?\s*` + SQFT, "gi");
   // "Square Feet 1,576" in a unit table, where the column name comes first
@@ -1324,6 +1341,25 @@ function parseListing(text) {
   units.sort((a, b) => (a.beds ?? 9) - (b.beds ?? 9) || a.sqft - b.sqft);
   out.units = units.slice(0, 12);
 
+  // New York listings show the rent before specials as "base rent" next to a lower "net effective rent"; the form wants the base rent
+  const base = t.match(/\$\s?(\d{1,2},\d{3}|\d{3,4})(?![\d,])\s*(?:\/\s*mo\.?\s*)?(?:base|gross) rent/i);
+  if (base && out.units.length === 1) { out.units[0].price = toNum(base[1]); out.units[0].prices = [toNum(base[1])]; }
+  // without a size the unit can't be estimated, but its bedrooms, bathrooms and rent are still worth filling in
+  if (!out.units.length) {
+    const b = t.match(bedRe), ba = t.match(bathRe);
+    const p = [...t.matchAll(new RegExp(priceRe.source, "g"))].map(m => toNum(m[1])).find(v => v >= 500);
+    out.noSize = { beds: b ? (b[1] ? 0 : +b[2]) : null, baths: ba ? +ba[1] : null, price: base ? toNum(base[1]) : p ?? null };
+  }
+  const dom = t.match(/days on market\D{0,12}(\d{1,3})|(\d{1,3}) days on market/i);
+  out.days = dom ? +(dom[1] || dom[2]) : null;
+  const free = t.match(/(\d+(?:\.5)?|one|two) (week|month)s? free|free (?:rent )?for (\d+|one|two) (week|month)s?/i);
+  if (free) {
+    const n = free[1] || free[3];
+    out.free = { n: { one: 1, two: 2 }[n.toLowerCase()] || +n, unit: (free[2] || free[4]).toLowerCase() + "s" };
+  }
+  const lease = t.match(/(\d{1,2})[- ]month lease/i);
+  out.lease = lease ? +lease[1] : null;
+
   // look for amenities only near "Amenities" / "Features" headings, so site menus and footers don't count
   const heads = [...t.matchAll(/\b(amenities|features)\b/gi)].map(m => m.index);
   const scope = heads.length ? heads.map(i => t.slice(i, i + 2500)).join("\n") : t;
@@ -1358,7 +1394,7 @@ function renderTableNote(applies = true) {
   if (!rentTable) return;
   note.innerHTML = `Rent table pasted${rentTable.city ? ` for ${esc(rentTable.city)}` : ""}${rentTable.updated ? `, updated ${esc(rentTable.updated)}` : ""}. ` +
     (applies ? "It's used for the location comparison. "
-      : `It isn't used, because the city above isn't ${esc(rentTable.city)}. `) +
+      : `It isn't used, because the city above isn't in ${esc(rentTable.city)}. `) +
     `<button type="button" class="linkbtn" id="table-clear">Remove table</button>`;
   $("table-clear").addEventListener("click", () => { rentTable = null; renderTableNote(); update(); });
 }
@@ -1416,11 +1452,29 @@ function runParse() {
       const l = unitLabel(u);
       return `<button type="button" class="unit" data-i="${i}" aria-pressed="${i === 0}">${esc(l.main)}<small>${esc(l.sub)}</small></button>`;
     }).join("")}</div>`);
+  } else if (r.state) {
+    // a listing with no size: clear the old unit so the previous unit's size and rent aren't used by mistake
+    const u = r.noSize;
+    $("sqft").value = "";
+    if (u.beds !== null) $("beds").value = String(Math.min(u.beds, 5));
+    if (u.baths !== null) applyUnit({ sqft: "", beds: u.beds, baths: u.baths, price: u.price });
+    else $("listed-in").value = u.price ?? "";
+    lines.push(`<div class="warn-line"><strong>Size not found.</strong> Enter the size in sq ft below to see an estimate. Ask the agent if the listing doesn't say.</div>`);
   } else kept.push("unit and rent");
+
+  if (listingText) {
+    if (r.days !== null) $("days-in").value = r.days;
+    if (r.free) { $("free-in").value = r.free.n; $("free-unit").value = r.free.unit; }
+    if (r.lease) $("lease-in").value = r.lease;
+    const specials = [r.free ? `${r.free.n} ${r.free.n === 1 ? r.free.unit.slice(0, -1) : r.free.unit} free` : null, r.lease ? `${r.lease}-month lease` : null,
+      r.days !== null ? `${r.days} days on market` : null].filter(Boolean);
+    if (specials.length) lines.push(`<div><strong>Also found:</strong> ${esc(specials.join(", "))}.</div>`);
+  }
 
   if (foundFees.length) {
     const { added, skipped } = addFees(foundFees);
-    lines.push(`<div><strong>Fees:</strong> added ${added} ${added === 1 ? "fee" : "fees"}${skipped ? `, skipped ${skipped} already in the list` : ""}. Check them in the Fees section.</div>`);
+    const optional = foundFees.some(f => f.group === "pets" || f.group === "parking");
+    lines.push(`<div><strong>Fees:</strong> added ${added} ${added === 1 ? "fee" : "fees"}${skipped ? `, skipped ${skipped} already in the list` : ""}. Check them in the Fees section.${optional ? " Pet and parking fees count in the total only if you tick them there." : ""}</div>`);
   }
   if (table && !table.city) {
     lines.push(`<div><strong>Rent table:</strong> found, but not which city it's for, so it isn't used. Copy the table together with its heading, such as "How much does it cost to rent an apartment in New York?".</div>`);
