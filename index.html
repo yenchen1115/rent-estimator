@@ -161,6 +161,8 @@ textarea:focus-visible, .btn:focus-visible, .unit:focus-visible { outline: 2px s
 .deal { display: grid; gap: 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
 .verdict-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px; }
 .verdict { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+#listed-gap { display: inline-block; max-width: 100%; white-space: normal; border-radius: 12px; line-height: 1.35; }
+.figure { min-width: 0; }
 .verdict.good { background: var(--good-bg); color: var(--good); }
 .verdict.fair { background: var(--accent-soft); color: var(--accent); }
 .verdict.warn { background: var(--warn-bg); color: var(--warn-ink); }
@@ -448,7 +450,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       <p>This follows the team's analysis. States are grouped into Low, Medium and High market segments by k-means on each state's median rent per sq ft, and each segment has its own random forest that predicts monthly <code>price</code> from bathrooms, bedrooms, square feet, state and the 27 amenities.</p>
       <div class="seg-table-wrap">
         <table>
-          <thead><tr><th>Segment</th><th class="num">States</th><th class="num">Listings</th><th class="num">5-fold CV R²</th><th class="num">Median error</th><th class="num">Tree nodes</th></tr></thead>
+          <thead><tr><th>Segment</th><th class="num">States</th><th class="num">Listings</th><th class="num">5-fold CV R²</th><th class="num">Median error</th></tr></thead>
           <tbody id="seg-rows"></tbody>
         </table>
       </div>
@@ -458,21 +460,6 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
         <li>The 80% range comes from the cross-validated errors in each segment: 8 in 10 real rents fell inside it. It is wider in the High segment, where rents vary the most.</li>
         <li>"What each amenity changes here" compares the estimate with and without that amenity for this specific unit. These are associations in the data, not the value an amenity adds.</li>
         <li>The model was trained on asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com.</li>
-      </ul>
-    </details>
-    <details>
-      <summary>How the verdict and negotiation points work</summary>
-      <ul>
-        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.4% in Low, 6.7% in Medium, 12.1% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects.</li>
-        <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states by rent per square foot.</li>
-        <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
-        <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which only knows the state, can't separate them from the building.</li>
-        <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state or market segment.</li>
-        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
-        <li><strong>Move-in specials</strong>: free weeks or months and one-time discounts are spread over the lease to give the net effective rent, which is what the verdict uses.</li>
-        <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
-        <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
-        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
       </ul>
     </details>
     <details>
@@ -492,12 +479,29 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       </ul>
     </details>
     <details>
-      <summary>Limitations</summary>
+      <summary>How the verdict and negotiation points work</summary>
       <ul>
-        <li><strong>Old data:</strong> the data are 2018–2019 rents from RentDigs.com. The BLS adjustment assumes every unit in a region grew at the regional average.</li>
-        <li><strong>Location:</strong> the model uses state as its location feature. The tool compares against city medians separately, but neighbourhood-level differences are not captured.</li>
-        <li><strong>Building quality:</strong> gyms and extra bathrooms come mostly with newer, higher-end buildings, and the model cannot separate the two. The page therefore hides any amenity or bathroom amount above 5% of the estimate.</li>
-        <li><strong>Reading listings:</strong> listing sites format pages differently, so units, amenities or fees can be misread. Check the filled-in form before relying on the result.</li>
+        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.4% in Low, 6.7% in Medium, 12.1% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects.</li>
+        <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states by rent per square foot.</li>
+        <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
+        <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which only knows the state, can't separate them from the building.</li>
+        <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state or market segment.</li>
+        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
+        <li><strong>Move-in specials</strong>: free weeks or months and one-time discounts are spread over the lease to give the net effective rent, which is what the verdict uses.</li>
+        <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
+        <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
+        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
+      </ul>
+    </details>
+    <details>
+      <summary>Limitations</summary>
+      <p>Read the estimate as a reference point, not an exact price.</p>
+      <ul>
+        <li><strong>Asking rents from 2018–2019.</strong> The model learned from asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com. Asking rents can differ from what tenants finally sign for. The BLS adjustment assumes every unit in a region grew at the regional average, and because the index includes existing leases, it may understate increases on new listings.</li>
+        <li><strong>Accuracy differs by market.</strong> Half of the actual rents were within 6.4% of the prediction in the Low segment, 6.7% in Medium and 12.1% in High. States with few listings, such as New York (562), give less stable estimates.</li>
+        <li><strong>No neighbourhood detail.</strong> The model knows the state, not the city or street, so a downtown unit and a suburban unit with the same features get the same estimate. The city comparison helps, but it can't capture differences between neighbourhoods.</li>
+        <li><strong>Building quality is mixed in.</strong> Gyms and extra bathrooms come mostly with newer, higher-end buildings, and the model can't separate the two. The page hides any amenity or bathroom amount above 5% of the estimate.</li>
+        <li><strong>Listings can be misread.</strong> Listing sites format pages differently, so units, amenities or fees can be read wrongly. Check the filled-in form before relying on the result.</li>
       </ul>
     </details>
     <details>
@@ -599,7 +603,7 @@ function setup() {
 
   $("seg-rows").innerHTML = ["Low", "Medium", "High"].map(seg => {
     const g = M.segments[seg];
-    return `<tr><td>${seg}</td><td class="num">${g.states.length}</td><td class="num">${g.n.toLocaleString()}</td><td class="num">${g.cv_r2.toFixed(4)}</td><td class="num">${(g.median_abs_pct_error * 100).toFixed(1)}%</td><td class="num">${g.n_nodes.toLocaleString()}</td></tr>`;
+    return `<tr><td>${seg}</td><td class="num">${g.states.length}</td><td class="num">${g.n.toLocaleString()}</td><td class="num">${g.cv_r2.toFixed(4)}</td><td class="num">${(g.median_abs_pct_error * 100).toFixed(1)}%</td></tr>`;
   }).join("");
 
   const target = monthName(R.target_period);
@@ -719,7 +723,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const talk = { missing: [], size: false, baths: false, days: 0, local: null };
   let verdictCls = null;
   const minGain = Math.max(15, est * 0.01);
-  const fairTop = est * (1 + S.median_abs_pct_error);
+  const fairTop = est * (1 + M.segments[seg].median_abs_pct_error);
 
   const costs = $("costs");
   costs.hidden = !listedRaw || (!hasSpecials && !fees.length);
