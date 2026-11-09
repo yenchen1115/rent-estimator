@@ -463,7 +463,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
     <details>
       <summary>How the verdict and negotiation points work</summary>
       <ul>
-        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to 3% above the estimate is a fair price; above that but inside the range leaves room to negotiate; above the range is more than the model expects.</li>
+        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.4% in Low, 6.7% in Medium, 12.1% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects.</li>
         <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states by rent per square foot.</li>
         <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
         <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which only knows the state, can't separate them from the building.</li>
@@ -492,13 +492,12 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       </ul>
     </details>
     <details>
-      <summary>Columns from the dataset that are not inputs</summary>
+      <summary>Limitations</summary>
       <ul>
-        <li><code>price</code>, <code>price_display</code>: the value being predicted.</li>
-        <li><code>cityname</code>, <code>latitude</code>, <code>longitude</code>, <code>address</code>: the team's model uses the state for location.</li>
-        <li><code>pets_allowed</code>, <code>has_photo</code>, <code>fee</code>: not used in the team's model.</li>
-        <li><code>category</code>, <code>price_type</code>, <code>currency</code>: the data covers monthly USD apartment rents only.</li>
-        <li><code>id</code>, <code>title</code>, <code>body</code>, <code>source</code>, <code>time</code>: identifiers, free text and posting metadata.</li>
+        <li><strong>Old data:</strong> the data are 2018–2019 rents from RentDigs.com. The BLS adjustment assumes every unit in a region grew at the regional average.</li>
+        <li><strong>Location:</strong> the model uses state as its location feature. The tool compares against city medians separately, but neighbourhood-level differences are not captured.</li>
+        <li><strong>Building quality:</strong> gyms and extra bathrooms come mostly with newer, higher-end buildings, and the model cannot separate the two. The page therefore hides any amenity or bathroom amount above 5% of the estimate.</li>
+        <li><strong>Reading listings:</strong> listing sites format pages differently, so units, amenities or fees can be misread. Check the filled-in form before relying on the result.</li>
       </ul>
     </details>
     <details>
@@ -720,7 +719,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const talk = { missing: [], size: false, baths: false, days: 0, local: null };
   let verdictCls = null;
   const minGain = Math.max(15, est * 0.01);
-  const fairTop = est * 1.03;
+  const fairTop = est * (1 + S.median_abs_pct_error);
 
   const costs = $("costs");
   costs.hidden = !listedRaw || (!hasSpecials && !fees.length);
