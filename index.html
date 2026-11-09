@@ -481,16 +481,16 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
     <details>
       <summary>How the verdict and negotiation points work</summary>
       <ul>
-        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.4% in Low, 6.7% in Medium, 12.1% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects.</li>
+        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.4% in Low, 6.7% in Medium, 12.1% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects. When the listing looks like a room in shared housing (wording such as "1 room in a 3-bedroom", "shared living room", "communal kitchens", "Student Housing" or a price per person), the verdict is "Not comparable" and the rent isn't compared with the estimate or local averages, because the model was trained on whole apartments.</li>
         <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states by rent per square foot.</li>
         <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
         <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which only knows the state, can't separate them from the building.</li>
-        <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state or market segment.</li>
-        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
+        <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state. When the state has fewer than 20 of that size, the page uses all same-bedroom listings in the state before turning to other states in the market segment, because rents differ a lot between states.</li>
+        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. A neighbourhood comparison table on the page (such as "Rent Comparison to the Murray Hill Neighborhood") is used first, because it is closer to the unit than a citywide average. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
         <li><strong>Move-in specials</strong>: free weeks or months and one-time discounts are spread over the lease to give the net effective rent, which is what the verdict uses.</li>
         <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
         <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
-        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
+        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. When a pasted rent table's average for the same bedroom count is higher than the model estimate, the counter-offer uses that average instead, because the model only knows the state and can miss how expensive a city or neighbourhood is. If the rent is already below that average, the page suggests focusing on fees and amenities rather than the rent. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
       </ul>
     </details>
     <details>
@@ -650,7 +650,7 @@ function setup() {
     if ($("paste").value === lastParsedText) $("paste").value = "";
     setTimeout(runParse, 0);
   });
-  $("paste-clear").addEventListener("click", () => { $("paste").value = ""; $("found").hidden = true; $("listed-in").value = ""; update(); });
+  $("paste-clear").addEventListener("click", () => { $("paste").value = ""; $("found").hidden = true; $("listed-in").value = ""; sharedListing = false; hoodTable = null; update(); });
   ["sqft", "beds", "baths", "listed-in"].forEach(id => $(id).addEventListener("input", () => {
     document.querySelectorAll("#found .unit").forEach(b => b.setAttribute("aria-pressed", "false"));
   }));
@@ -699,6 +699,7 @@ function update() {
 
   $("size-hint").textContent = (sqft < 250 || sqft > 4000) ? "Few listings in the data are outside 250–4,000 sq ft, so this estimate is less reliable." : "";
   if (st.n < 50) notes.push(`Only ${st.n} listings from ${STATE_NAMES[s] || s} in the data, so the state's effect is uncertain.`);
+  if (sharedListing) notes.push("This looks like a room in shared housing. The model was trained on whole apartments, so the estimate is for a whole apartment like this one, not for one room.");
   if (sqft / Math.max(beds, 1) < 250) notes.push("This size is small for the number of bedrooms. Check the square footage.");
   $("notes").innerHTML = notes.map(n => `<div class="note">${esc(n)}</div>`).join("");
 
@@ -777,8 +778,9 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
     });
     amen.forEach(a => {
       const sh = b.amen[a] || 0, gain = eff[a] * mult;
-      if (gain >= minGain) pros.push([Math.min(gain, amountCap), gain > amountCap
-        ? `Has ${esc(a)}: ${sh < 0.5 ? "only " : ""}${share(sh)} of ${esc(bName)} mention it. Listings with it are often in pricier buildings, so the model can't tell how much it adds on its own.`
+      if (gain >= minGain) pros.push([sh < 0.01 ? 0 : Math.min(gain, amountCap), gain > amountCap
+        ? `Has ${esc(a)}: ${sh < 0.01 ? "almost none" : `${sh < 0.5 ? "only " : ""}${share(sh)}`} of ${esc(bName)} mention it. Listings with it are often in pricier buildings, so the model can't tell how much it adds on its own.`
+        : sh < 0.01 ? `Has ${esc(a)}: almost none of ${esc(bName)} mention it, so the data can't say what it adds.`
         : `Has ${esc(a)}: ${sh < 0.5 ? "only " : ""}${share(sh)} of ${esc(bName)} mention it. On average it adds about <strong>${money(gain)}/mo</strong> for similar units.`]);
     });
 
@@ -808,18 +810,24 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const cityRow = city ? T.by_city[`${s}|${city}|${beds}`] : null;
   const norm = v => (v || "").toLowerCase().replace(/[^a-z]/g, "");
   // an empty city field takes the table's city, so pasting only the table and the unit still works
-  const tableFits = !!rentTable && (!cityText || [cityText, city].some(c => norm(tableCity(s, c)) === norm(rentTable.city)));
+  const fits = tb => !!tb && (!cityText || [cityText, city].some(c => norm(tableCity(s, c)) === norm(tb.city)));
+  // a neighbourhood table is closer to the unit than a citywide one, so it's used whenever it has this bedroom count
+  const rentTable = fits(hoodTable) && hoodTable.rows[beds] ? hoodTable : rentTableCity || hoodTable;
+  const tableFits = fits(rentTable);
   const citywide = tableFits && cityText && norm(tableCity(s, cityText)) !== norm(cityText);
-  renderTableNote(tableFits);
+  renderTableNote(rentTable, tableFits);
   const tableAvg = tableFits ? rentTable.rows[beds] : null;
-  if (tableAvg && listed) {
-    const where = cityName(s, rentTable.city || city || cityText);
+  // with a pasted rent table that runs above the model, its average is the counter-offer: the model only knows the state
+  let target = { price: est, table: null };
+  if (tableAvg && listed && !sharedListing) {
+    const where = rentTable.hood ? `${rentTable.hood}, ${cityName(s, rentTable.city)}` : cityName(s, rentTable.city || city || cityText);
+    if (tableAvg > est) target = { price: tableAvg, table: `the ${citywide && !rentTable.hood ? "citywide " : ""}average ${esc(bedLabel)} in ${esc(where)} on the listing site` };
     const d = listed / tableAvg - 1;
-    const detail = `the ${citywide ? "citywide " : ""}average ${esc(bedLabel)} in ${esc(where)} on the listing site (${money(tableAvg)}${rentTable.updated ? `, updated ${esc(rentTable.updated)}` : ""})`;
+    const detail = `the ${citywide && !rentTable.hood ? "citywide " : ""}average ${esc(bedLabel)} in ${esc(where)} on the listing site (${money(tableAvg)}${rentTable.updated ? `, ${rentTable.hood ? "as of" : "updated"} ${esc(rentTable.updated)}` : ""})`;
     if (d > 0.05) talk.local = { city: where, price: tableAvg };
     if (d > 0.05) neg.push([listed - tableAvg, `Location: ${priceWord.toLowerCase()} is <strong>${pct(d)}</strong> above ${detail}.`, "price"]);
     else if (d < -0.05) pros.push([tableAvg - listed, `Location: ${priceWord.toLowerCase()} is <strong>${pct(d)}</strong> below ${detail}. Averages run above a typical rent, since a few expensive units pull them up.`]);
-  } else if (cityRow && listed) {
+  } else if (cityRow && listed && !sharedListing) {
     const local = cityRow.median * mult, d = listed / local - 1;
     const detail = `the typical ${esc(bedLabel)} in ${esc(cityName(s, city))} (${money(round10(local))}, median of ${cityRow.n} listings, adjusted to ${R.target_period.slice(0, 4)})`;
     if (d > 0.05) talk.local = { city: cityName(s, city), price: local };
@@ -855,8 +863,8 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
         `<ul>${items.slice(5).map(([, t]) => `<li>${t}</li>`).join("")}</ul></details></li>` : "");
   };
   // what the first list shows depends on the verdict: arguing the rent down only makes sense above the estimate
-  const suspicious = !!listed && listed < lo * 0.8;
-  const vstate = !listed ? null : suspicious ? "low" : listed < lo ? "good" : listed <= fairTop ? "fair" : "high";
+  const suspicious = !sharedListing && !!listed && listed < lo * 0.8;
+  const vstate = !listed ? null : sharedListing ? "fair" : suspicious ? "low" : listed < lo ? "good" : listed <= fairTop ? "fair" : "high";
   fees.filter(f => f.twin).forEach(f => neg.push([Infinity, `Check whether "${esc(f.twin)}" and "${esc(f.name)}" are the same charge.`, "verify"]));
   if (ft.varies.length) neg.push([Infinity, `Ask for a monthly estimate of the costs that vary: ${esc(ft.varies.join(", "))}.`, "verify"]);
   const keep = { high: ["verify", "price", "fee", "amenity"], fair: ["verify", "fee", "amenity"], good: ["verify", "amenity"], low: ["verify", "amenity"] }[vstate] || ["verify", "price", "fee", "amenity"];
@@ -877,7 +885,9 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   } else {
     const range = `${money(round10(lo))}–${money(round10(hi))}`;
     const [cls, label, text, counter] =
-      suspicious ? ["warn", "Unusually low", `${priceWord} of ${money(listed)} is far below the likely range of ${range}.`,
+      sharedListing ? ["warn", "Not comparable", `${priceWord} of ${money(listed)} is for a room in shared housing, while the estimate is for a whole apartment, so the two can't be compared.`,
+        "Compare this rent with other rooms or co-living listings nearby rather than with the model estimate."]
+      : suspicious ? ["warn", "Unusually low", `${priceWord} of ${money(listed)} is far below the likely range of ${range}.`,
         "Confirm the listing is genuine before anything else."]
       : listed < lo ? ["good", "Good deal", `${priceWord} of ${money(listed)} is below the likely range of ${range}.`,
         "This is below what similar units go for, so pushing on price could cost you the unit. If you like it, move quickly and confirm the listing is genuine."]
@@ -885,8 +895,10 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
         "The price is reasonable. If you ask for anything, keep it low-cost for the landlord, such as a flexible move-in date or a waived application fee."]
       : [listed <= hi ? "warn" : "bad", listed <= hi ? "Room to negotiate" : "Above expected range",
         listed <= hi ? `${priceWord} of ${money(listed)} is above the estimate but inside the likely range.` : `${priceWord} of ${money(listed)} is above the likely range of ${range}.`,
-        `Suggested counter-offer: <strong>${money(round10(est))}</strong>, the model estimate, about ${money(listed - est)} below the ${priceWord.toLowerCase()}. Lead with the points above.`];
-    verdictCls = suspicious ? "warn-low" : cls;
+        !target.table ? `Suggested counter-offer: <strong>${money(round10(est))}</strong>, the model estimate, about ${money(listed - est)} below the ${priceWord.toLowerCase()}. Lead with the points above.`
+        : target.price < listed ? `Suggested counter-offer: <strong>${money(round10(target.price))}</strong>, ${target.table}, about ${money(listed - target.price)} below the ${priceWord.toLowerCase()}. The model estimate of ${money(round10(est))} is lower, but the model only knows the state, so the local average is a more realistic ask. Lead with the points above.`
+        : `The ${priceWord.toLowerCase()} is already below ${target.table} (${money(target.price)}), so asking for a lower rent is a hard sell even though the model estimate is lower. Focus on fees and amenities instead.`];
+    verdictCls = sharedListing ? "shared" : suspicious ? "warn-low" : cls;
     v.className = `verdict ${cls}`; v.textContent = label; v.hidden = false;
     $("listed-num").innerHTML = `${money(listedRaw)}<small>/ month</small>`;
     $("listed-gap").className = `verdict ${cls}`;
@@ -911,11 +923,11 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   if (!hasSpecials) questions.push("Are there any move-in specials right now?");
   questions.push("When is the unit available, and what lease lengths do you offer?");
 
-  if (verdictCls === "warn" || verdictCls === "bad") {
-    const ask = round10(talk.local ? talk.local.price : est);
-    const market = talk.local
-      ? `From what I've seen, similar ${bedLabel} units in ${talk.local.city} rent for around ${money(ask)}.`
-      : `From what I've seen, similar units in the area rent for around ${money(ask)}.`;
+  if ((verdictCls === "warn" || verdictCls === "bad") && target.price < listed) {
+    const ask = round10(target.price);
+    const market = talk.local && round10(talk.local.price) >= ask
+      ? `From what I've seen, similar ${bedLabel} units in ${talk.local.city} rent for around ${money(round10(talk.local.price))} on average.`
+      : `Based on similar listings, a fair rent for this unit looks closer to ${money(ask)}.`;
     const traits = [talk.size ? `is a bit smaller than most ${bedLabel} units` : null,
       talk.baths ? "has fewer bathrooms than most" : null,
       talk.days ? `has been listed for ${talk.days} days` : null].filter(Boolean);
@@ -1003,8 +1015,8 @@ function similarPrices(s, seg, beds, sqft, city, bedLabel, stateName) {
   const tries = [
     cityIdx >= 0 ? [st.rows.filter(r => inBand(r) && r[4] === cityIdx), `${bedLabel} listings of ${size} in ${cityName(s, city)}`] : null,
     [st.rows.filter(inBand), `${bedLabel} listings of ${size} in ${stateName}`],
-    [segRows.filter(inBand), `${bedLabel} listings of ${size} in states with similar rent levels`],
     [st.rows.filter(r => r[0] === beds), `all ${bedLabel} listings in ${stateName}, any size`],
+    [segRows.filter(inBand), `${bedLabel} listings of ${size} in states with similar rent levels`],
   ].filter(Boolean);
   const hit = tries.find(([rows]) => rows.length >= T.min_n);
   return hit ? { prices: hit[0].map(r => r[3]).sort((a, b) => a - b), name: hit[1] } : null;
@@ -1075,7 +1087,9 @@ function niceStep(raw) {
 const FEE_GROUPS = { required: "Required", pets: "Pets", parking: "Parking", addons: "Add-ons", situational: "Only if it applies" };
 const FEE_KINDS = { monthly: "per month", once: "one-time", moveout: "at move-out", deposit: "refundable deposit", varies: "varies" };
 const fees = [];
-let rentTable = null;
+let rentTableCity = null;
+let hoodTable = null;
+let sharedListing = false;
 const feeCount = { pets: false, parking: false, addons: false };
 
 // a heading must be the whole line, so fee names such as "Utility - Sewer" or "Monthly Pet Rent" aren't mistaken for one
@@ -1245,6 +1259,7 @@ const AMENITY_PATTERNS = {
   "Washer Dryer": /washer\s*(\/|and|&)\s*dryer|in[- ]unit laundry|\bw\/d\b/i,
   "Wood Floors": /hardwood|wood[- ](style\s+)?floor/i,
 };
+const norm2 = v => (v || "").toLowerCase().replace(/[^a-z]/g, "");
 const toNum = s => parseFloat(String(s).replace(/,/g, ""));
 
 function nearest(re, before, after) {
@@ -1271,6 +1286,8 @@ function findCity(state, raw) {
 }
 
 function parseListing(text) {
+  // renters' reviews describe other units and years ("my 500 sq ft studio", "luxury building"), so they're left out
+  text = text.replace(/renters? reviews and ratings[\s\S]*?(?=nearby schools|points of interest|rental price ranges|$)/i, "");
   const t = text.replace(/ /g, " ");
   const out = { state: null, city: null, cityRaw: null, units: [], amenities: [] };
 
@@ -1297,11 +1314,17 @@ function parseListing(text) {
   const priceRe = /\$\s?(\d{1,2},\d{3}|\d{3,4})(?![\d,])/;
 
   const found = [];
+  const allSpans = [...t.matchAll(sqftRe), ...t.matchAll(labelRe)].map(m => [m.index, m.index + m[0].length]).sort((a, b) => a[0] - b[0]);
   const addUnit = (index, length, lo, hi, weight) => {
     if (lo < 150 || lo > 12000) return;
-    const before = t.slice(Math.max(0, index - 140), index);
-    const after = t.slice(index + length, index + length + 100);
-    const b = nearest(bedRe, before, after), ba = nearest(bathRe, before, after), p = nearest(priceRe, before, after);
+    // stop at the neighbouring units' sizes, so a unit without a price doesn't borrow the next card's
+    const prevEnd = Math.max(0, ...allSpans.filter(([, e]) => e <= index).map(([, e]) => e));
+    const nextStart = Math.min(t.length, ...allSpans.filter(([a]) => a >= index + length).map(([a]) => a));
+    const before = t.slice(Math.max(prevEnd, index - 140), index);
+    const after = t.slice(index + length, Math.min(nextStart, index + length + 100));
+    // a price after the size belongs to the next card once a bedroom count ("3 Bedrooms", "Studio") comes first
+    const nextBed = after.search(bedRe);
+    const b = nearest(bedRe, before, after), ba = nearest(bathRe, before, after), p = nearest(priceRe, before, nextBed < 0 ? after : after.slice(0, nextBed));
     found.push({
       sqft: hi ? Math.round((lo + hi) / 2) : lo, range: hi ? [lo, hi] : null,
       beds: b ? (b[1] ? 0 : +b[2]) : null, baths: ba ? +ba[1] : null, price: p ? toNum(p[1]) : null, weight,
@@ -1328,10 +1351,17 @@ function parseListing(text) {
   };
   const groups = new Map();
   found.forEach(u => {
-    const k = u.range ? u.range.join("-") : String(u.sqft);
+    // same-size plans with different bedroom counts (an 818 sq ft studio and an 818 sq ft 1-bed) stay apart
+    const k = (u.range ? u.range.join("-") : String(u.sqft)) + "|" + (u.beds ?? "");
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(u);
   });
+  // a unit-table row without a bedroom count joins the one floor plan of the same size that has one
+  for (const [k, g] of groups) {
+    if (!k.endsWith("|")) continue;
+    const twins = [...groups.keys()].filter(o => o !== k && o.startsWith(k));
+    if (twins.length === 1) { groups.get(twins[0]).push(...g); groups.delete(k); }
+  }
   let units = [...groups.values()].map(g => {
     const prices = [...new Set(g.map(u => u.price).filter(p => p !== null))].sort((a, b) => a - b);
     return {
@@ -1342,7 +1372,10 @@ function parseListing(text) {
   if (units.some(u => u.beds !== null)) units = units.filter(u => u.beds !== null || u.baths !== null);
   if (units.some(u => !u.range)) units = units.filter(u => !u.range);
   units.sort((a, b) => (a.beds ?? 9) - (b.beds ?? 9) || a.sqft - b.sqft);
-  out.units = units.slice(0, 12);
+  // big buildings list dozens of floor plans; only the ones with a price can be checked, so they're listed first
+  const priced = units.filter(u => u.price !== null);
+  out.units = (priced.length ? priced : units).slice(0, 20);
+  out.unpriced = priced.length ? units.length - priced.length : 0;
 
   // New York listings show the rent before specials as "base rent" next to a lower "net effective rent"; the form wants the base rent
   const base = t.match(/\$\s?(\d{1,2},\d{3}|\d{3,4})(?![\d,])\s*(?:\/\s*mo\.?\s*)?(?:base|gross) rent/i);
@@ -1360,12 +1393,16 @@ function parseListing(text) {
     const n = free[1] || free[3];
     out.free = { n: { one: 1, two: 2 }[n.toLowerCase()] || +n, unit: (free[2] || free[4]).toLowerCase() + "s" };
   }
+  // a room in a shared apartment or student residence: the price is for one room, the size often for the whole apartment
+  out.shared = /co-?living|residence[- ]hall|student housing|roommate matching|shared (bath|kitchen|living|units?\b|rooms?\b)|communal (kitchen|bath)|(bathrooms|kitchens)[^.]{0,60}\b(communal|shared)\b|\b(1|one|a|private)( large| private| furnished)? room in (a |an )?([a-z]+ )?\d|\broom for rent\b|\$\s?[\d,]+\s*\/\s*(person|bed)\b/i.test(t);
   const lease = t.match(/(\d{1,2})[- ]month lease/i);
   out.lease = lease ? +lease[1] : null;
 
   // look for amenities only near "Amenities" / "Features" headings, so site menus and footers don't count
-  const heads = [...t.matchAll(/\b(amenities|features)\b/gi)].map(m => m.index);
-  const scope = heads.length ? heads.map(i => t.slice(i, i + 2500)).join("\n") : t;
+  const NAV = /\bapartments (with|under|for rent|for\b)|^see (the best|more)\b|apartments feature|^(browse|explore|learn more)\b|parking problems|^[\w .'-]{0,40}\b(luxury|pet friendly|furnished|student|corporate|senior|loft|gated|cheap|short-term|top rated|low income|military) apartments$/i;
+  const at = t.split("\n").filter(l => !NAV.test(l.trim())).join("\n");
+  const heads = [...at.matchAll(/\b(amenities|features)\b/gi)].map(m => m.index);
+  const scope = heads.length ? heads.map(i => at.slice(i, i + 2500)).join("\n") : at;
   out.amenities = Object.keys(AMENITY_PATTERNS).filter(a => AMENITY_PATTERNS[a].test(scope));
   return out;
 }
@@ -1391,15 +1428,33 @@ function parseRentTable(text) {
   return { city, updated, rows, filtered };
 }
 
-function renderTableNote(applies = true) {
+// a listing site's neighbourhood comparison ("Rent Comparison to the Murray Hill Neighborhood"): lowest price here, then the neighbourhood average
+function parseHoodTable(text, fallbackCity) {
+  const t = text.replace(/\s+/g, " ");
+  const h = t.match(/rent comparison to the ([A-Za-z .'-]{2,40}?) neighbou?rhood/i);
+  if (!h) return null;
+  const end = t.slice(h.index + h[0].length).search(/rent comparison to the city|methodology/i);
+  const body = t.slice(h.index + h[0].length, end < 0 ? undefined : h.index + h[0].length + end);
+  const rows = {};
+  for (const m of body.matchAll(/\b(studio|(\d) bedrooms?)\s+\$\s?[\d,]+\s+\$\s?([\d,]+)/gi)) {
+    const beds = m[2] ? +m[2] : 0;
+    if (!(beds in rows)) rows[beds] = toNum(m[3]);
+  }
+  if (!Object.keys(rows).length) return null;
+  const city = (t.match(/rent comparison to the city of ([A-Za-z .'-]{2,40}?) floorplan/i) || [])[1] || fallbackCity;
+  const updated = (t.match(/rent pricing data as of (\d{1,2}\/\d{1,2}\/\d{4})/i) || [])[1] || null;
+  return city ? { city, hood: h[1].trim(), updated, rows, filtered: false } : null;
+}
+
+function renderTableNote(rentTable, applies = true) {
   const note = $("table-note");
   note.hidden = !rentTable;
   if (!rentTable) return;
-  note.innerHTML = `Rent table pasted${rentTable.city ? ` for ${esc(rentTable.city)}` : ""}${rentTable.updated ? `, updated ${esc(rentTable.updated)}` : ""}. ` +
+  note.innerHTML = `Rent table pasted${rentTable.hood ? ` for ${esc(rentTable.hood)}, ${esc(rentTable.city)}` : rentTable.city ? ` for ${esc(rentTable.city)}` : ""}${rentTable.updated ? `, ${rentTable.hood ? "as of" : "updated"} ${esc(rentTable.updated)}` : ""}. ` +
     (applies ? "It's used for the location comparison. "
       : `It isn't used, because the city above isn't in ${esc(rentTable.city)}. `) +
     `<button type="button" class="linkbtn" id="table-clear">Remove table</button>`;
-  $("table-clear").addEventListener("click", () => { rentTable = null; renderTableNote(); update(); });
+  $("table-clear").addEventListener("click", () => { if (rentTable === hoodTable) hoodTable = null; else rentTableCity = null; update(); });
 }
 // ---- end parser ----
 
@@ -1429,8 +1484,10 @@ function runParse() {
   const box = $("found");
   if (!text.trim()) { box.hidden = true; return; }
   const r = parseListing(text);
+  if (r.state || r.units.length) sharedListing = r.shared;
   const foundFees = parseFees(text);
   const table = parseRentTable(text);
+  const hood = parseHoodTable(text, r.city || r.cityRaw);
   // each paste only fills in what it contains, so pasting a fee tab later keeps the location and unit
   const listingText = !!(r.state || r.units.length);
   const lines = [], kept = [];
@@ -1450,7 +1507,7 @@ function runParse() {
     $("listed-in").value = "";
     applyUnit(r.units[0]);
     const many = r.units.length > 1;
-    lines.push(`<div><strong>${many ? `${r.units.length} unit types found.` : "Unit found."}</strong>${many ? " The first one is filled in. Choose the one you want:" : ""}</div>`);
+    lines.push(`<div><strong>${many ? `${r.units.length} unit types found.` : "Unit found."}</strong>${r.unpriced ? ` ${r.unpriced} more without a price aren't shown.` : ""}${many ? " The first one is filled in. Choose the one you want:" : ""}</div>`);
     lines.push(`<div class="units">${r.units.map((u, i) => {
       const l = unitLabel(u);
       return `<button type="button" class="unit" data-i="${i}" aria-pressed="${i === 0}">${esc(l.main)}<small>${esc(l.sub)}</small></button>`;
@@ -1479,13 +1536,17 @@ function runParse() {
     const optional = foundFees.some(f => f.group === "pets" || f.group === "parking");
     lines.push(`<div><strong>Fees:</strong> added ${added} ${added === 1 ? "fee" : "fees"}${skipped ? `, skipped ${skipped} already in the list` : ""}. Check them in the Fees section.${optional ? " Pet and parking fees count in the total only if you tick them there." : ""}</div>`);
   }
+  // a neighbourhood table belongs to one listing page, so a new listing replaces it
+  if (r.state || r.units.length) hoodTable = hood;
+  if (hood) lines.push(`<div><strong>Neighbourhood rent table:</strong> average rent in ${esc(hood.hood)}, ${esc(hood.city)}${hood.updated ? `, as of ${esc(hood.updated)}` : ""}. It's used first in the location comparison.</div>`);
   if (table && !table.city) {
     lines.push(`<div><strong>Rent table:</strong> found, but not which city it's for, so it isn't used. Copy the table together with its heading, such as "How much does it cost to rent an apartment in New York?".</div>`);
   } else if (table) {
-    rentTable = table;
-    lines.push(`<div><strong>Rent table:</strong> average rent for ${(([lo, hi]) => `${lo ? `${lo}-bedroom` : "studio"} to ${hi}-bedroom apartments`)([Math.min(...Object.keys(table.rows)), Math.max(...Object.keys(table.rows))])}${table.city ? ` in ${esc(table.city)}` : ""}${table.updated ? `, updated ${esc(table.updated)}` : ""}. It replaces the 2018–19 city median in the location comparison.</div>`);
+    rentTableCity = table;
+    lines.push(`<div><strong>Rent table:</strong> average rent for ${(([lo, hi]) => `${lo ? `${lo}-bedroom` : "studio"} to ${hi}-bedroom apartments`)([Math.min(...Object.keys(table.rows)), Math.max(...Object.keys(table.rows))])}${table.city ? ` in ${esc(table.city)}` : ""}${table.updated ? `, updated ${esc(table.updated)}` : ""}. ${hoodTable && hoodTable.rows && norm2(hoodTable.city) === norm2(table.city) ? "It's used for bedroom counts the neighbourhood table doesn't cover." : `It's used in the location comparison for listings in ${esc(table.city)}.`}</div>`);
     if (table.filtered) lines.push(`<div>This table is filtered by an amenity. The table for all apartments works better, because the model already accounts for amenities.</div>`);
   }
+  if (r.shared) lines.push(`<div class="warn-line"><strong>Shared housing.</strong> This looks like a room in a shared apartment, co-living or student residence, so the rent is for one room. The model was trained on whole apartments, so the page shows the estimate but doesn't compare the rent with it.</div>`);
   if (kept.length) lines.push(`<div>Not in this text, so left as before: ${kept.join(", ")}.</div>`);
 
   lastParsedText = text;
