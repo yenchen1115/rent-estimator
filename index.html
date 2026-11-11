@@ -1098,6 +1098,7 @@ const HEADINGS = [
   [/^(personal )?add-?ons$/i, "addons", null],
   [/^pets?$|^pet (policy|fees)( and fees)?$|^dogs?$|^cats?$/i, "pets", null],
   [/^parking( fees| options)?$/i, "parking", null],
+  [/^storage( fees)?$/i, "addons", null],
   [/^due at move-?out$/i, "required", "moveout"],
   [/^one-?time( basics| fees)?$|^due at (application|move-?in)$/i, "required", "once"],
   [/^required( fees)?$|^utilities( (&|and) essentials)?$/i, "required", null],
@@ -1320,7 +1321,10 @@ function parseListing(text) {
     // stop at the neighbouring units' sizes, so a unit without a price doesn't borrow the next card's
     const prevEnd = Math.max(0, ...allSpans.filter(([, e]) => e <= index).map(([, e]) => e));
     const nextStart = Math.min(t.length, ...allSpans.filter(([a]) => a >= index + length).map(([a]) => a));
-    const before = t.slice(Math.max(prevEnd, index - 140), index);
+    let before = t.slice(Math.max(prevEnd, index - 140), index);
+    // an expanded card's details ("Model Price Range $4,785 - $4,954") end at the next card's name, so a price before that isn't this card's
+    const cardEnd = [...before.matchAll(/find out more|check availability|model rent and fees|model price range[^$]{0,40}\$[\d,]+(?:\s*[-–]\s*\$[\d,]+)?/gi)].pop();
+    if (cardEnd) before = before.slice(cardEnd.index + cardEnd[0].length);
     const after = t.slice(index + length, Math.min(nextStart, index + length + 100));
     // a price after the size belongs to the next card once a bedroom count ("3 Bedrooms", "Studio") comes first
     const nextBed = after.search(bedRe);
