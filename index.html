@@ -397,7 +397,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
           <h3>Where this rent sits</h3>
           <svg id="pct-meter" viewBox="0 0 400 120" role="img" aria-label="The model's likely range and similar listings' rents on one scale, with the listed rent marked"></svg>
           <div class="scale-key">
-            <div><span><svg aria-hidden="true"><circle cx="9" cy="6" r="5" fill="var(--accent)"/></svg>Model estimate</span><span><svg aria-hidden="true"><rect x="0" y="1" width="18" height="10" rx="2" fill="var(--band)" fill-opacity="0.45"/></svg>80% likely range</span></div>
+            <div><span><svg aria-hidden="true"><circle cx="9" cy="6" r="5" fill="var(--accent)"/></svg>Model estimate</span><span><svg aria-hidden="true"><rect x="0" y="1" width="18" height="10" rx="2" fill="var(--band)" fill-opacity="0.45"/></svg>80% likely range</span><span><svg aria-hidden="true"><rect x="0" y="1" width="18" height="10" rx="2" fill="var(--band)" fill-opacity="0.9"/></svg><span id="fair-key" style="margin:0">Fair price zone</span></span></div>
             <div><span><svg aria-hidden="true"><line x1="9" x2="9" y1="0" y2="12" stroke="var(--ink)" stroke-width="2"/></svg>Median</span><span><svg aria-hidden="true"><rect x="0" y="1" width="18" height="10" rx="2" fill="var(--muted)" fill-opacity="0.25"/></svg>Middle 50% of similar listings</span></div>
           </div>
           <p class="pct-text" id="pct-text"></p>
@@ -851,7 +851,8 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
       `<strong>Model estimate</strong> ${money(round10(est))}, likely ${money(round10(lo))}–${money(round10(hi))}. ` +
       `<strong>Similar listings</strong>: the middle half rent for ${money(round10(p25))}–${money(round10(p75))}, median ${money(round10(p50))}. ` +
       esc(pctSentence);
-    drawScale(lo, est, hi, p25, p50, p75, listed);
+    drawScale(lo, est, hi, p25, p50, p75, listed, Math.min(fairTop, hi));
+    $("fair-key").textContent = `Fair price: up to ${(M.segments[seg].median_abs_pct_error * 100).toFixed(1)}% above the estimate`;
   }
 
   const list = (items, empty) => {
@@ -1022,7 +1023,7 @@ function similarPrices(s, seg, beds, sqft, city, bedLabel, stateName) {
   return hit ? { prices: hit[0].map(r => r[3]).sort((a, b) => a - b), name: hit[1] } : null;
 }
 
-function drawScale(lo, est, hi, p25, p50, p75, listed) {
+function drawScale(lo, est, hi, p25, p50, p75, listed, fairTop) {
   const L0 = 122, R0 = 390, y1 = 40, y2 = 80;
   const marks = [lo, hi, p25, p75, est, listed ?? est];
   const min = Math.min(...marks) * 0.94, max = Math.max(...marks) * 1.05;
@@ -1044,6 +1045,7 @@ function drawScale(lo, est, hi, p25, p50, p75, listed) {
   $("pct-meter").innerHTML = ticks +
     rowLabel(y1, "Model estimate") +
     `<rect x="${x(lo)}" y="${y1 - 8}" width="${x(hi) - x(lo)}" height="16" rx="3" fill="var(--band)" fill-opacity="0.45"/>` +
+    `<rect x="${x(est)}" y="${y1 - 8}" width="${x(fairTop) - x(est)}" height="16" fill="var(--band)" fill-opacity="0.9"/>` +
     `<circle cx="${x(est)}" cy="${y1}" r="6" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>` +
     rowLabel(y2, "Similar listings") +
     `<rect x="${x(p25)}" y="${y2 - 8}" width="${x(p75) - x(p25)}" height="16" rx="3" fill="var(--muted)" fill-opacity="0.25"/>` +
