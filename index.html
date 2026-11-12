@@ -1090,6 +1090,7 @@ const FEE_GROUPS = { required: "Required", pets: "Pets", parking: "Parking", add
 const FEE_KINDS = { monthly: "per month", once: "one-time", moveout: "at move-out", deposit: "refundable deposit", varies: "varies" };
 const fees = [];
 let rentTableCity = null;
+let currentProperty = null;
 let hoodTable = null;
 let sharedListing = false;
 const feeCount = { pets: false, parking: false, addons: false };
@@ -1512,8 +1513,20 @@ function runParse() {
   const listingText = !!(r.state || r.units.length);
   const lines = [], kept = [];
 
-  if (listingText && (r.name || r.address))
-    lines.push(`<div><strong>Property:</strong> ${esc([r.name, r.address].filter(Boolean).join(" · "))}</div>`);
+  // a different building's page starts over: its fees and specials replace the previous listing's instead of adding to them
+  const propKey = listingText ? (r.name || r.address || "").toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  if (propKey) {
+    if (currentProperty && propKey !== currentProperty) {
+      const dropped = fees.length;
+      fees.length = 0; renderFees();
+      $("days-in").value = ""; $("free-in").value = ""; $("lease-in").value = 12;
+      if (dropped) lines.push(`<div><strong>New listing:</strong> removed ${dropped} ${dropped === 1 ? "fee" : "fees"} from the previous listing.</div>`);
+    }
+    currentProperty = propKey;
+  }
+
+  if (listingText && r.name) lines.push(`<div><strong>Property:</strong> ${esc(r.name)}</div>`);
+  if (listingText && r.address) lines.push(`<div><strong>Address:</strong> ${esc(r.address)}</div>`);
   if (r.state) {
     $("state").value = r.state; fillCities();
     $("city").value = r.city || r.cityRaw || "";
