@@ -1292,6 +1292,20 @@ function parseListing(text) {
   const t = text.replace(/ /g, " ");
   const out = { state: null, city: null, cityRaw: null, units: [], amenities: [] };
 
+  // property name and street address, shown in the found box so the presenter can see which listing was read
+  const addrRe = /^(\d+[A-Za-z]?\s[^,\n]{2,60}),\s*[A-Za-z .'-]+,\s*[A-Z]{2}\s+\d{5}/m;
+  const streetRe = /^\d+[A-Za-z]?\s+[^\n]{0,40}\b(st|street|ave|avenue|rd|road|blvd|boulevard|pl|place|dr|drive|ln|lane|way|ct|court|broadway|terrace|parkway|pkwy)\b\.?[^\n]{0,20}$/im;
+  const am = addrRe.exec(t), sm = am ? null : streetRe.exec(t.slice(0, 1500));
+  out.address = am ? am[1].trim() : sm ? sm[0].trim() : null;
+  const nameHit = /^Viewing:\s*([^|\n]{2,80}?)\s*\|/m.exec(t) || /^About (?!us$|the |this |our |greatschools)([^\n]{2,60})$/im.exec(t);
+  let name = nameHit ? nameHit[1].trim() : null;
+  if (!name && am) {
+    const prev = t.slice(0, am.index).trimEnd().split("\n").pop().trim();
+    if (prev && prev.length <= 60 && /[A-Za-z]/.test(prev) && !/check availability|contact|share|map|apartments? for rent|\$/i.test(prev)) name = prev;
+  }
+  const plain = v => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  out.name = name && out.address && plain(out.address) === plain(name) ? null : name;
+
   for (const re of [/([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\s+\d{5}/g, /([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\b/g]) {
     for (const m of t.matchAll(re)) {
       if (!M.state_stats[m[2]]) continue;
@@ -1496,6 +1510,8 @@ function runParse() {
   const listingText = !!(r.state || r.units.length);
   const lines = [], kept = [];
 
+  if (listingText && (r.name || r.address))
+    lines.push(`<div><strong>Property:</strong> ${esc([r.name, r.address].filter(Boolean).join(" · "))}</div>`);
   if (r.state) {
     $("state").value = r.state; fillCities();
     $("city").value = r.city || r.cityRaw || "";
