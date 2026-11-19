@@ -266,12 +266,16 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
             <select id="state"></select>
           </div>
           <div class="field">
-            <label for="city">City <span class="legend-note">for reference</span></label>
+            <label for="city">City <span class="legend-note">sets the county</span></label>
             <input id="city" type="text" list="city-list" placeholder="Start typing a city">
             <datalist id="city-list"></datalist>
           </div>
+          <div class="field">
+            <label for="county">County <span class="col">county</span></label>
+            <select id="county"></select>
+          </div>
         </div>
-        <div class="hint">The estimate depends on the state, not the city. The city is used to compare with local rents.</div>
+        <div class="hint" id="county-hint"></div>
         <div class="hint" id="table-note" hidden></div>
       </fieldset>
 
@@ -434,7 +438,8 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       <details class="model-details">
         <summary>Model details</summary>
       <dl class="stats">
-        <div><dt>Market segment (k-means)</dt><dd id="segment"></dd></div>
+        <div><dt>Market segment</dt><dd id="segment"></dd></div>
+        <div><dt>County data used by the model</dt><dd id="county-stats"></dd></div>
         <div><dt>Estimated $ per sq ft</dt><dd id="pps"></dd></div>
         <div><dt id="state-pps-label">State median $ per sq ft</dt><dd id="state-pps"></dd></div>
         <div><dt>Listings from this state</dt><dd id="state-n"></dd></div>
@@ -447,7 +452,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
   <div class="footer">
     <details>
       <summary>About the model</summary>
-      <p>This follows the team's analysis. States are grouped into Low, Medium and High market segments by k-means on each state's median rent per sq ft, and each segment has its own random forest that predicts monthly <code>price</code> from bathrooms, bedrooms, square feet, state and the 27 amenities.</p>
+      <p>This follows the team's analysis. States are grouped into four market segments (Low, Medium-Low, Medium-High and High), and each segment has its own random forest. It predicts the logarithm of monthly <code>price</code> from the logarithm of square feet, bathrooms, bedrooms, state, the 27 amenities, and two facts about the county: its 2019 median household income and the logarithm of its 2019 population density. The page turns the prediction back into dollars.</p>
       <div class="seg-table-wrap">
         <table>
           <thead><tr><th>Segment</th><th class="num">States</th><th class="num">Listings</th><th class="num">5-fold CV R²</th><th class="num">Median error</th></tr></thead>
@@ -455,9 +460,9 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
         </table>
       </div>
       <ul>
-        <li>This page runs the team's final tuned models unchanged: <code>RandomForestRegressor(random_state=0)</code> with 100 fully grown trees per segment, trained on all listings in the segment. Grid search with 5-fold cross-validation picked <code>min_samples_leaf=1</code> for every segment and <code>max_features</code> of 8 (High), 8 (Medium) and 6 (Low): each split considers only that many randomly chosen inputs, which makes the trees more varied and the average more accurate. The page downloads only the segment of the state you choose, once per visit.</li>
-        <li>The R² column is the 5-fold cross-validation score of the tuned models from the notebook, recomputed with the same code. With default settings it was 0.4639 (High), 0.5880 (Medium) and 0.6693 (Low).</li>
-        <li>The 80% range comes from the cross-validated errors in each segment: 8 in 10 real rents fell inside it. It is wider in the High segment, where rents vary the most.</li>
+        <li>This page runs the team's final tuned models unchanged: <code>RandomForestRegressor(random_state=0)</code> with 100 fully grown trees per segment, trained on all listings in the segment. Grid search with 5-fold cross-validation picked <code>min_samples_leaf=1</code> for every segment and <code>max_features</code> of 10 (High), 10 (Medium-High), 8 (Medium-Low) and 10 (Low): each split considers only that many randomly chosen inputs, which makes the trees more varied and the average more accurate. The page downloads only the segment of the state you choose, once per visit.</li>
+        <li>The R² column is the 5-fold cross-validation score of the tuned models from the notebook, recomputed with the same code. It is measured on log rent, as in the notebook. The median error is measured in dollars: half of real rents were within that percentage of the prediction.</li>
+        <li>The 80% range comes from the cross-validated errors in each segment: 8 in 10 real rents fell inside it. It is widest in the High and Low segments.</li>
         <li>"What each amenity changes here" compares the estimate with and without that amenity for this specific unit. These are associations in the data, not the value an amenity adds.</li>
         <li>The model was trained on asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com.</li>
       </ul>
@@ -481,16 +486,16 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
     <details>
       <summary>How the verdict and negotiation points work</summary>
       <ul>
-        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.4% in Low, 6.7% in Medium, 12.1% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects. When the listing looks like a room in shared housing (wording such as "1 room in a 3-bedroom", "shared living room", "communal kitchens", "Student Housing" or a price per person), the verdict is "Not comparable" and the rent isn't compared with the estimate or local averages, because the model was trained on whole apartments.</li>
-        <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states by rent per square foot.</li>
+        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.6% in Low, 5.6% in Medium-Low, 4.8% in Medium-High, 7.0% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects. When the listing looks like a room in shared housing (wording such as "1 room in a 3-bedroom", "shared living room", "communal kitchens", "Student Housing" or a price per person), the verdict is "Not comparable" and the rent isn't compared with the estimate or local averages, because the model was trained on whole apartments.</li>
+        <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states with similar rents.</li>
         <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
-        <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which only knows the state, can't separate them from the building.</li>
+        <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which knows the county but not the building, can't separate them from the building.</li>
         <li><strong>Similar listings</strong> on the scale have the same number of bedrooms and a size within 20% of this unit, in the same city when there are at least 20 of them, otherwise in the same state. When the state has fewer than 20 of that size, the page uses all same-bedroom listings in the state before turning to other states in the market segment, because rents differ a lot between states.</li>
-        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model itself only uses the state. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. A neighbourhood comparison table on the page (such as "Rent Comparison to the Murray Hill Neighborhood") is used first, because it is closer to the unit than a citywide average. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
+        <li><strong>Location</strong> compares the listed rent with the median rent of same-bedroom listings in the same city, for cities with at least 20 such listings. This comes from the data directly, because the model knows the county but not the city. If you paste a listing site's city rent table (average rent by bedroom count, such as "How much does it cost to rent an apartment in New York?"), the comparison uses that table's average for the same bedroom count instead, as long as the city matches. A neighbourhood comparison table on the page (such as "Rent Comparison to the Murray Hill Neighborhood") is used first, because it is closer to the unit than a citywide average. Those averages are current, but they run above a typical rent because a few expensive units pull them up.</li>
         <li><strong>Move-in specials</strong>: free weeks or months and one-time discounts are spread over the lease to give the net effective rent, which is what the verdict uses.</li>
         <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
         <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
-        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. When a pasted rent table's average for the same bedroom count is higher than the model estimate, the counter-offer uses that average instead, because the model only knows the state and can miss how expensive a city or neighbourhood is. If the rent is already below that average, the page suggests focusing on fees and amenities rather than the rent. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
+        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. When a pasted rent table's average for the same bedroom count is higher than the model estimate, the counter-offer uses that average instead, because the model only knows the county and can miss how expensive a neighbourhood is. If the rent is already below that average, the page suggests focusing on fees and amenities rather than the rent. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
       </ul>
     </details>
     <details>
@@ -498,15 +503,15 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       <p>Read the estimate as a reference point, not an exact price.</p>
       <ul>
         <li><strong>Asking rents from 2018–2019.</strong> The model learned from asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com. Asking rents can differ from what tenants finally sign for. The BLS adjustment assumes every unit in a region grew at the regional average, and because the index includes existing leases, it may understate increases on new listings.</li>
-        <li><strong>Accuracy differs by market.</strong> Half of the actual rents were within 6.4% of the prediction in the Low segment, 6.7% in Medium and 12.1% in High. States with few listings, such as New York (562), give less stable estimates.</li>
-        <li><strong>No neighbourhood detail.</strong> The model knows the state, not the city or street, so a downtown unit and a suburban unit with the same features get the same estimate. The city comparison helps, but it can't capture differences between neighbourhoods.</li>
+        <li><strong>Accuracy differs by market.</strong> Half of the actual rents were within 6.6% of the prediction in the Low segment, 5.6% in Medium-Low, 4.8% in Medium-High and 7.0% in High. States with few listings, such as New York (562), give less stable estimates.</li>
+        <li><strong>No neighbourhood detail.</strong> The model knows the state and the county, not the street, so two units with the same features in the same county get the same estimate, even if one is downtown and one is in a quiet suburb. The county is also filled in from the city name, so a city that spans several counties gets the county with the most listings. The city comparison helps, but it can't capture differences between neighbourhoods.</li>
         <li><strong>Building quality is mixed in.</strong> Gyms and extra bathrooms come mostly with newer, higher-end buildings, and the model can't separate the two. The page hides any amenity or bathroom amount above 5% of the estimate.</li>
         <li><strong>Listings can be misread.</strong> Listing sites format pages differently, so units, amenities or fees can be read wrongly. Check the filled-in form before relying on the result.</li>
       </ul>
     </details>
     <details>
       <summary>Updating the model</summary>
-      <p>Running <code>train_team_rf_full.py</code> rebuilds <code>model.json</code> (segments, states, scores and feature names) and the compressed tree files <code>rf_high.txt</code>, <code>rf_medium.txt</code> and <code>rf_low.txt</code>. Features follow the order scikit-learn's <code>get_feature_names_out()</code> gives them, such as <code>cats__state_TX</code> and <code>remainder__square_feet</code>, so a change to the notebook's features carries over when the files are rebuilt.</p>
+      <p>Running <code>build.py</code> on the team's <code>apartments_segmented.csv</code> rebuilds <code>model.json</code> (segments, states, counties, scores and feature names), the comparison data and the compressed tree files <code>rf_high.txt</code>, <code>rf_medium_high.txt</code>, <code>rf_medium_low.txt</code> and <code>rf_low.txt</code>. Features follow the order scikit-learn's <code>get_feature_names_out()</code> gives them, such as <code>cats__state_TX</code> and <code>remainder__log_square_feet</code>, so a change to the notebook's features carries over when the files are rebuilt.</p>
     </details>
   </div>
 </div>
@@ -568,14 +573,47 @@ function forestRaw(F, x) {
   return sum / roots.length;
 }
 
+// the models predict log rent, so the forest's average is turned back into dollars with exp
 function predict(inp) {
   const F = forests[M.state_stats[inp.state].segment];
+  const [income, logDensity] = M.counties[inp.state][inp.county];
   const vals = {
-    "remainder__bathrooms": inp.baths, "remainder__bedrooms": inp.beds, "remainder__square_feet": inp.sqft,
-    [`cats__state_${inp.state}`]: 1,
+    "remainder__log_square_feet": Math.log(inp.sqft), "remainder__county_median_income_2019": income,
+    "remainder__log_county_population_density": logDensity,
+    "remainder__bathrooms": inp.baths, "remainder__bedrooms": inp.beds, [`cats__state_${inp.state}`]: 1,
   };
   inp.amen.forEach(a => { vals[`remainder__${a}`] = 1; });
-  return forestRaw(F, F.features.map(f => vals[f] ?? 0));
+  return Math.exp(forestRaw(F, F.features.map(f => vals[f] ?? 0)));
+}
+
+// the county comes from the city when the data has listings there, otherwise the state's county with the most listings
+let countyAuto = true;
+const topCounty = s => Object.entries(M.counties[s]).sort((a, b) => b[1][2] - a[1][2])[0][0];
+function countyForCity(s, city) {
+  const map = M.city_county[s] || {}, c = (city || "").trim().toLowerCase();
+  if (!c) return null;
+  const hit = Object.keys(map).find(k => k.toLowerCase() === c);
+  if (hit) return map[hit];
+  if (s === "NY" && NYC_PARTS.test(c)) return map["New York"] || null;
+  return null;
+}
+function fillCounties() {
+  const s = $("state").value;
+  $("county").innerHTML = Object.keys(M.counties[s]).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+}
+function syncCounty() {
+  const s = $("state").value, city = $("city").value;
+  if (countyAuto) {
+    const fromCity = countyForCity(s, city);
+    $("county").value = fromCity || topCounty(s);
+    $("county-hint").textContent = fromCity
+      ? `County filled in from the city. Change it if the unit is in a different county.`
+      : city.trim()
+        ? `${city.trim()} isn't in the 2019 data, so the county with the most listings in the state is used. Choose the right county if you know it.`
+        : `No city entered, so the county with the most listings in the state is used.`;
+  } else {
+    $("county-hint").textContent = "County chosen by hand.";
+  }
 }
 
 // "New York" is both a state and a city, so the state gets "State" and the city gets "City"
@@ -596,12 +634,12 @@ function setup() {
   $("chips").innerHTML = M.amenities.map((a, i) =>
     `<label class="chip"><input type="checkbox" id="am-${i}" value="${esc(a)}"><span>${esc(a)}</span></label>`).join("");
 
-  $("state").value = EXAMPLE.state; fillCities();
+  $("state").value = EXAMPLE.state; fillCities(); fillCounties();
   $("city").value = EXAMPLE.city; $("sqft").value = EXAMPLE.sqft;
   $("beds").value = EXAMPLE.beds; $("baths").value = EXAMPLE.baths; $("listed-in").value = EXAMPLE.listed;
   document.querySelectorAll("#chips input").forEach(el => { el.checked = EXAMPLE.amenities.includes(el.value); });
 
-  $("seg-rows").innerHTML = ["Low", "Medium", "High"].map(seg => {
+  $("seg-rows").innerHTML = ["Low", "Medium-Low", "Medium-High", "High"].map(seg => {
     const g = M.segments[seg];
     return `<tr><td>${seg}</td><td class="num">${g.states.length}</td><td class="num">${g.n.toLocaleString()}</td><td class="num">${g.cv_r2.toFixed(4)}</td><td class="num">${(g.median_abs_pct_error * 100).toFixed(1)}%</td></tr>`;
   }).join("");
@@ -613,7 +651,9 @@ function setup() {
   $("adjust-rows").innerHTML = Object.entries(R.regions).map(([name, g]) =>
     `<tr><td>${esc(name)}</td><td><code>${esc(g.series)}</code></td><td class="num">${g.base.toFixed(3)}</td><td class="num">${g.latest.toFixed(3)}</td><td class="num">×${g.multiplier.toFixed(4)}</td></tr>`).join("");
 
-  $("state").addEventListener("change", () => { fillCities(); $("city").value = ""; update(); });
+  $("state").addEventListener("change", () => { fillCities(); fillCounties(); countyAuto = true; $("city").value = ""; update(); });
+  $("city").addEventListener("input", () => { countyAuto = true; });
+  $("county").addEventListener("input", () => { countyAuto = false; });
   $("f").addEventListener("input", update);
   $("f").addEventListener("submit", e => e.preventDefault());
   $("clear-am").addEventListener("click", () => { document.querySelectorAll("#chips input").forEach(el => el.checked = false); update(); });
@@ -667,6 +707,9 @@ function update() {
   drawTrend(region, mult);
   $("where").textContent = `${$("city").value.trim() || "Any city"}, ${s}`;
   $("segment").textContent = seg;
+  syncCounty();
+  const county = $("county").value, [cIncome, cLogD] = M.counties[s][county];
+  $("county-stats").textContent = `${county}: median household income ${money(cIncome)}, ${Math.round(Math.exp(cLogD)).toLocaleString()} people per sq mi (2019)`;
   $("state-pps-label").textContent = `State median $ per sq ft, adjusted to ${R.target_period.slice(0, 4)}`;
   $("state-pps").textContent = "$" + (st.median_pps * mult).toFixed(2);
   $("state-n").textContent = st.n.toLocaleString();
@@ -687,7 +730,7 @@ function update() {
     return;
   }
 
-  const inp = { state: s, sqft, beds, baths, amen };
+  const inp = { state: s, county, sqft, beds, baths, amen };
   const est2019 = predict(inp), est = est2019 * mult;
   const lo = est * S.interval.low_mult, hi = est * S.interval.high_mult;
   const bedLabel = beds === 0 ? "studio" : `${beds}-bed`;
@@ -817,7 +860,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const citywide = tableFits && cityText && norm(tableCity(s, cityText)) !== norm(cityText);
   renderTableNote(rentTable, tableFits);
   const tableAvg = tableFits ? rentTable.rows[beds] : null;
-  // with a pasted rent table that runs above the model, its average is the counter-offer: the model only knows the state
+  // with a pasted rent table that runs above the model, its average is the counter-offer: the model only knows the county
   let target = { price: est, table: null };
   if (tableAvg && listed && !sharedListing) {
     const where = rentTable.hood ? `${rentTable.hood}, ${cityName(s, rentTable.city)}` : cityName(s, rentTable.city || city || cityText);
@@ -897,7 +940,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
       : [listed <= hi ? "warn" : "bad", listed <= hi ? "Room to negotiate" : "Above expected range",
         listed <= hi ? `${priceWord} of ${money(listed)} is above the estimate but inside the likely range.` : `${priceWord} of ${money(listed)} is above the likely range of ${range}.`,
         !target.table ? `Suggested counter-offer: <strong>${money(round10(est))}</strong>, the model estimate, about ${money(listed - est)} below the ${priceWord.toLowerCase()}. Lead with the points above.`
-        : target.price < listed ? `Suggested counter-offer: <strong>${money(round10(target.price))}</strong>, ${target.table}, about ${money(listed - target.price)} below the ${priceWord.toLowerCase()}. The model estimate of ${money(round10(est))} is lower, but the model only knows the state, so the local average is a more realistic ask. Lead with the points above.`
+        : target.price < listed ? `Suggested counter-offer: <strong>${money(round10(target.price))}</strong>, ${target.table}, about ${money(listed - target.price)} below the ${priceWord.toLowerCase()}. The model estimate of ${money(round10(est))} is lower, but the model only knows the county, so the local average is a more realistic ask. Lead with the points above.`
         : `The ${priceWord.toLowerCase()} is already below ${target.table} (${money(target.price)}), so asking for a lower rent is a hard sell even though the model estimate is lower. Focus on fees and amenities instead.`];
     verdictCls = sharedListing ? "shared" : suspicious ? "warn-low" : cls;
     v.className = `verdict ${cls}`; v.textContent = label; v.hidden = false;
@@ -992,7 +1035,7 @@ function amenityEffects(s, seg, beds) {
   if (!effectCache[key]) {
     const rows = listingsLike(s, seg, beds), step = Math.max(1, Math.ceil(rows.length / 100));
     const sample = rows.filter((_, i) => i % step === 0)
-      .map(([st, r]) => ({ state: st, beds: r[0], baths: r[1], sqft: r[2], amen: maskToAmen(r[5]) }));
+      .map(([st, r]) => ({ state: st, county: LS.states[st].counties[r[6]], beds: r[0], baths: r[1], sqft: r[2], amen: maskToAmen(r[5]) }));
     const eff = {};
     M.amenities.forEach(a => {
       eff[a] = avgEffect(sample, u => { const others = u.amen.filter(x => x !== a); return [{ ...u, amen: [...others, a] }, { ...u, amen: others }]; });
@@ -1528,7 +1571,7 @@ function runParse() {
   if (listingText && r.name) lines.push(`<div><strong>Property:</strong> ${esc(r.name)}</div>`);
   if (listingText && r.address) lines.push(`<div><strong>Address:</strong> ${esc(r.address)}</div>`);
   if (r.state) {
-    $("state").value = r.state; fillCities();
+    $("state").value = r.state; fillCities(); fillCounties(); countyAuto = true;
     $("city").value = r.city || r.cityRaw || "";
     lines.push(`<div><strong>Location:</strong> ${esc(r.city || r.cityRaw || "city not found")}, ${esc(r.state)}</div>`);
   } else kept.push("location");
