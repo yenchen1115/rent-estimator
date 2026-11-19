@@ -486,7 +486,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
     <details>
       <summary>How the verdict and negotiation points work</summary>
       <ul>
-        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is a good deal; up to the segment's median error above the estimate is a fair price (6.6% in Low, 5.6% in Medium-Low, 4.8% in Medium-High, 7.0% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects. When the listing looks like a room in shared housing (wording such as "1 room in a 3-bedroom", "shared living room", "communal kitchens", "Student Housing" or a price per person), the verdict is "Not comparable" and the rent isn't compared with the estimate or local averages, because the model was trained on whole apartments.</li>
+        <li><strong>Verdict</strong>: the listed rent is compared with the estimate and its 80% range. Below the range is unusually low, since fewer than 1 in 10 similar units rent for that little, so the page asks the user to confirm the listing is genuine, and a rent more than 20% below the range also shows a scam warning; from the bottom of the range up to the segment's median error above the estimate is a fair price (6.6% in Low, 5.6% in Medium-Low, 4.8% in Medium-High, 7.0% in High, from the 5-fold cross-validation: half of real rents were within that distance of the model's prediction, so a smaller gap is within the model's normal error); above that but inside the range leaves room to negotiate; above the range is more than the model expects. When the listing looks like a room in shared housing (wording such as "1 room in a 3-bedroom", "shared living room", "communal kitchens", "Student Housing" or a price per person), the verdict is "Not comparable" and the rent isn't compared with the estimate or local averages, because the model was trained on whole apartments.</li>
         <li><strong>Comparable listings</strong>: listings in the same state with the same number of bedrooms. When there are fewer than 20, the page uses all states in the same market segment instead, shown as "states with similar rent levels" since the segments group states with similar rents.</li>
         <li><strong>Missing amenities</strong> are listed when at least 25% of comparable listings mention them and adding them raises the model's estimate by at least $15 or 1%. Many listings don't mention every amenity, so these shares understate how common an amenity really is.</li>
         <li><strong>Dollar amounts</strong> for amenities, size and bathrooms are averages over up to 100 real listings with the same state and bedroom count: the model prices each of them with and without the feature, and the page reports the average difference. This is steadier than changing one feature on this unit alone, but it describes similar units in general rather than this unit exactly. When an amenity's or bathroom's amount is more than 5% of the estimate, the page doesn't show it: amenities such as a gym, and extra bathrooms, come mostly with newer, higher-end buildings in pricier areas, and the model, which knows the county but not the building, can't separate them from the building.</li>
@@ -495,7 +495,7 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
         <li><strong>Move-in specials</strong>: free weeks or months and one-time discounts are spread over the lease to give the net effective rent, which is what the verdict uses.</li>
         <li><strong>Fees</strong> change the estimated total monthly cost and the cash needed at move-in, not the verdict, because the 2018–2019 listings don't say which fees their rent included. Fees are sorted by the headings on the listing (Required, One-Time, Situational, Add-Ons, Pets, Parking) and by name when there are no headings. Required fees always count, pets, parking and add-ons count when ticked, and situational fees such as transfer or month-to-month charges never count. One-time fees are spread over the lease; refundable deposits only add to the move-in cash.</li>
         <li><strong>Days on market</strong>: a listing that has been up for more than 14 days adds a negotiation point.</li>
-        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. When a pasted rent table's average for the same bedroom count is higher than the model estimate, the counter-offer uses that average instead, because the model only knows the county and can miss how expensive a neighbourhood is. If the rent is already below that average, the page suggests focusing on fees and amenities rather than the rent. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For a good deal or an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
+        <li><strong>What to ask for</strong> depends on the verdict. Above the estimate, the list is titled "There is negotiable space on" and includes reasons to lower the rent, plus a counter-offer at the model estimate. When a pasted rent table's average for the same bedroom count is higher than the model estimate, the counter-offer uses that average instead, because the model only knows the county and can miss how expensive a neighbourhood is. If the rent is already below that average, the page suggests focusing on fees and amenities rather than the rent. At a fair price it becomes "Worth asking about" and keeps only fees and amenities to ask about, since arguing the rent down no longer makes sense. For an unusually low rent it becomes "Before you sign" and keeps only things to confirm. Possible duplicate fees and costs that vary are listed in every case. Each list shows its five largest points.</li>
       </ul>
     </details>
     <details>
@@ -918,13 +918,13 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   };
   // what the first list shows depends on the verdict: arguing the rent down only makes sense above the estimate
   const suspicious = !sharedListing && !!listed && listed < lo * 0.8;
-  const vstate = !listed ? null : sharedListing ? "fair" : suspicious ? "low" : listed < lo ? "good" : listed <= fairTop ? "fair" : "high";
+  const vstate = !listed ? null : sharedListing ? "fair" : listed < lo ? "low" : listed <= fairTop ? "fair" : "high";
   fees.filter(f => f.twin).forEach(f => neg.push([Infinity, `Check whether "${esc(f.twin)}" and "${esc(f.name)}" are the same charge.`, "verify"]));
   if (ft.varies.length) neg.push([Infinity, `Ask for a monthly estimate of the costs that vary: ${esc(ft.varies.join(", "))}.`, "verify"]);
   const keep = { high: ["verify", "price", "fee", "amenity"], fair: ["verify", "fee", "amenity"], good: ["verify", "amenity"], low: ["verify", "amenity"] }[vstate] || ["verify", "price", "fee", "amenity"];
-  $("neg-title").textContent = { high: "There is negotiable space on", fair: "Worth asking about", good: "Before you sign", low: "Before you sign" }[vstate] || "Possible negotiation points";
+  $("neg-title").textContent = { high: "There is negotiable space on", fair: "Worth asking about", low: "Before you sign" }[vstate] || "Possible negotiation points";
   $("neg").innerHTML = list(neg.filter(x => keep.includes(x[2])),
-    vstate === "good" || vstate === "low" ? "Nothing in the data needs double-checking."
+    vstate === "low" ? "Nothing in the data needs double-checking."
       : vstate === "fair" ? "Nothing beyond the rent stands out to ask about."
       : "No clear weak points compared with similar listings.");
   $("pros").innerHTML = list(pros, "No clear strengths compared with similar listings.");
@@ -941,10 +941,9 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
     const [cls, label, text, counter] =
       sharedListing ? ["warn", "Not comparable", `${priceWord} of ${money(listed)} is for a room in shared housing, while the estimate is for a whole apartment, so the two can't be compared.`,
         "Compare this rent with other rooms or co-living listings nearby rather than with the model estimate."]
-      : suspicious ? ["warn", "Unusually low", `${priceWord} of ${money(listed)} is far below the likely range of ${range}.`,
-        "Confirm the listing is genuine before anything else."]
-      : listed < lo ? ["good", "Good deal", `${priceWord} of ${money(listed)} is below the likely range of ${range}.`,
-        "This is below what similar units go for, so pushing on price could cost you the unit. If you like it, move quickly and confirm the listing is genuine."]
+      : listed < lo ? ["warn", "Unusually low", `${priceWord} of ${money(listed)} is ${suspicious ? "far " : ""}below the likely range of ${range}.`,
+        suspicious ? "Confirm the listing is genuine before anything else."
+          : "Fewer than 1 in 10 similar units rent this low. It may be a real bargain, but check that the listing is genuine and the price isn't a typo before you pay anything."]
       : listed <= fairTop ? ["fair", "Fair price", `${priceWord} of ${money(listed)} is close to or below the estimate of ${money(round10(est))}.`,
         "The price is reasonable. If you ask for anything, keep it low-cost for the landlord, such as a flexible move-in date or a waived application fee."]
       : [listed <= hi ? "warn" : "bad", listed <= hi ? "Room to negotiate" : "Above expected range",
@@ -952,7 +951,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
         !target.table ? `Suggested counter-offer: <strong>${money(round10(est))}</strong>, the model estimate, about ${money(listed - est)} below the ${priceWord.toLowerCase()}. Lead with the points above.`
         : target.price < listed ? `Suggested counter-offer: <strong>${money(round10(target.price))}</strong>, ${target.table}, about ${money(listed - target.price)} below the ${priceWord.toLowerCase()}. The model estimate of ${money(round10(est))} is lower, but the model only knows the county, so the local average is a more realistic ask. Lead with the points above.`
         : `The ${priceWord.toLowerCase()} is already below ${target.table} (${money(target.price)}), so asking for a lower rent is a hard sell even though the model estimate is lower. Focus on fees and amenities instead.`];
-    verdictCls = sharedListing ? "shared" : suspicious ? "warn-low" : cls;
+    verdictCls = sharedListing ? "shared" : listed < lo ? "warn-low" : cls;
     v.className = `verdict ${cls}`; v.textContent = label; v.hidden = false;
     $("listed-num").innerHTML = `${money(listedRaw)}<small>/ month</small>`;
     $("listed-gap").className = `verdict ${cls}`;
@@ -988,7 +987,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
     const traitText = traits.length ? ` This one ${traits.length > 1 ? `${traits.slice(0, -1).join(", ")} and ${traits[traits.length - 1]}` : traits[0]}.` : "";
     asks.push(`${market}${traitText} Would you consider ${money(ask)} a month?`);
   }
-  if (verdictCls && verdictCls !== "good" && verdictCls !== "warn-low") {
+  if (verdictCls && verdictCls !== "warn-low") {
     ft.big.slice(0, 2).forEach(f => asks.push(f.kind === "monthly"
       ? `Is the "${f.name}" charge of ${feeAmountText(f)} required, or could it be dropped or included in the rent?`
       : `Would you be able to waive the "${f.name}" charge (${feeAmountText(f)})?`));
@@ -998,9 +997,7 @@ function renderDeal({ inp, est2019, est, lo, hi, mult, s, seg, beds, baths, sqft
   const opening = `Hi, I'm interested in the ${unitText}${place ? ` in ${place}` : ""}${listedRaw ? ` listed at ${money(listedRaw)} a month` : ""}.`;
   const closing = verdictCls === "warn-low"
     ? "Before going further, could I schedule an in-person viewing? I'd like to see the unit and meet you before applying or paying anything."
-    : verdictCls === "good"
-      ? "I'd like to move forward soon. Could I schedule a viewing, and what are the next steps to apply?"
-      : "Thanks, and I look forward to hearing from you.";
+    : "Thanks, and I look forward to hearing from you.";
   const lines = [
     opening,
     "",
