@@ -504,14 +504,14 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       <ul>
         <li><strong>Asking rents from 2018–2019.</strong> The model learned from asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com. Asking rents can differ from what tenants finally sign for. The BLS adjustment assumes every unit in a region grew at the regional average, and because the index includes existing leases, it may understate increases on new listings.</li>
         <li><strong>Accuracy differs by market.</strong> Half of the actual rents were within 6.6% of the prediction in the Low segment, 5.6% in Medium-Low, 4.8% in Medium-High and 7.0% in High. States with few listings, such as New York (562), give less stable estimates.</li>
-        <li><strong>No neighbourhood detail.</strong> The model knows the state and the county, not the street, so two units with the same features in the same county get the same estimate, even if one is downtown and one is in a quiet suburb. The county is also filled in from the city name, so a city that spans several counties gets the county with the most listings. The city comparison helps, but it can't capture differences between neighbourhoods.</li>
+        <li><strong>No neighbourhood detail.</strong> The model knows the state and the county, not the street, so two units with the same features in the same county get the same estimate, even if one is downtown and one is in a quiet suburb. The county comes from the listing's ZIP code. Without a ZIP code it comes from the city name, so a city that spans several counties gets the county with the most listings. The city comparison helps, but it can't capture differences between neighbourhoods.</li>
         <li><strong>Building quality is mixed in.</strong> Gyms and extra bathrooms come mostly with newer, higher-end buildings, and the model can't separate the two. The page hides any amenity or bathroom amount above 5% of the estimate.</li>
         <li><strong>Listings can be misread.</strong> Listing sites format pages differently, so units, amenities or fees can be read wrongly. Check the filled-in form before relying on the result.</li>
       </ul>
     </details>
     <details>
       <summary>Updating the model</summary>
-      <p>Running <code>build.py</code> on the team's <code>apartments_segmented.csv</code> rebuilds <code>model.json</code> (segments, states, counties, scores and feature names), the comparison data and the compressed tree files <code>rf_high.txt</code>, <code>rf_medium_high.txt</code>, <code>rf_medium_low.txt</code> and <code>rf_low.txt</code>. Features follow the order scikit-learn's <code>get_feature_names_out()</code> gives them, such as <code>cats__state_TX</code> and <code>remainder__log_square_feet</code>, so a change to the notebook's features carries over when the files are rebuilt.</p>
+      <p>Running <code>build.py</code> on the team's <code>apartments_segmented.csv</code> rebuilds <code>model.json</code> (segments, states, counties, scores and feature names), the comparison data and the compressed tree files <code>rf_high.txt</code>, <code>rf_medium_high.txt</code>, <code>rf_medium_low.txt</code> and <code>rf_low.txt</code>. Features follow the order scikit-learn's <code>get_feature_names_out()</code> gives them, such as <code>cats__state_TX</code> and <code>remainder__log_square_feet</code>, so a change to the notebook's features carries over when the files are rebuilt. <code>zip_county.py</code> builds <code>zip_county.json</code> from the US Census Bureau's 2020 ZIP code (ZCTA) to county file, giving each ZIP code the county that holds most of its land, so a pasted listing's ZIP code sets the county.</p>
     </details>
   </div>
 </div>
@@ -524,6 +524,7 @@ const EXAMPLE = { state: "TX", city: "Austin", sqft: 900, beds: "2", baths: "1",
 let M = null;
 let R = null;
 let T = null;
+let Z = null;
 let lastSummary = "";
 let lastParsedText = null;
 let summaryEdited = false;
@@ -586,8 +587,14 @@ function predict(inp) {
   return Math.exp(forestRaw(F, F.features.map(f => vals[f] ?? 0)));
 }
 
-// the county comes from the city when the data has listings there, otherwise the state's county with the most listings
-let countyAuto = true;
+// the county comes from the pasted listing's ZIP code, then the city when the data has listings there, otherwise the state's county with the most listings
+let countyAuto = true, zipHit = null;
+function countyForZip(s, zip) {
+  const i = zip ? Z.zip[zip] : undefined;
+  if (i === undefined) return null;
+  const [st, county] = Z.counties[i].split("|");
+  return st === s && M.counties[s][county] ? { state: s, county, zip } : null;
+}
 const topCounty = s => Object.entries(M.counties[s]).sort((a, b) => b[1][2] - a[1][2])[0][0];
 function countyForCity(s, city) {
   const map = M.city_county[s] || {}, c = (city || "").trim().toLowerCase();
@@ -604,9 +611,12 @@ function fillCounties() {
 function syncCounty() {
   const s = $("state").value, city = $("city").value;
   if (countyAuto) {
-    const fromCity = countyForCity(s, city);
-    $("county").value = fromCity || topCounty(s);
-    $("county-hint").textContent = fromCity
+    const z = zipHit && zipHit.state === s ? zipHit : null;
+    const fromCity = z ? null : countyForCity(s, city);
+    $("county").value = z ? z.county : fromCity || topCounty(s);
+    $("county-hint").textContent = z
+      ? `County filled in from ZIP code ${z.zip}. Change it if the unit is in a different county.`
+      : fromCity
       ? `County filled in from the city. Change it if the unit is in a different county.`
       : city.trim()
         ? `${city.trim()} isn't in the 2019 data, so the county with the most listings in the state is used. Choose the right county if you know it.`
@@ -651,8 +661,8 @@ function setup() {
   $("adjust-rows").innerHTML = Object.entries(R.regions).map(([name, g]) =>
     `<tr><td>${esc(name)}</td><td><code>${esc(g.series)}</code></td><td class="num">${g.base.toFixed(3)}</td><td class="num">${g.latest.toFixed(3)}</td><td class="num">×${g.multiplier.toFixed(4)}</td></tr>`).join("");
 
-  $("state").addEventListener("change", () => { fillCities(); fillCounties(); countyAuto = true; $("city").value = ""; update(); });
-  $("city").addEventListener("input", () => { countyAuto = true; });
+  $("state").addEventListener("change", () => { fillCities(); fillCounties(); countyAuto = true; zipHit = null; $("city").value = ""; update(); });
+  $("city").addEventListener("input", () => { countyAuto = true; zipHit = null; });
   $("county").addEventListener("input", () => { countyAuto = false; });
   $("f").addEventListener("input", update);
   $("f").addEventListener("submit", e => e.preventDefault());
@@ -1352,12 +1362,13 @@ function parseListing(text) {
   const plain = v => v.toLowerCase().replace(/[^a-z0-9]/g, "");
   out.name = name && out.address && plain(out.address) === plain(name) ? null : name;
 
-  for (const re of [/([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\s+\d{5}/g, /([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\b/g]) {
+  for (const re of [/([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\s+(\d{5})/g, /([A-Za-z][A-Za-z .'-]{1,40}),\s*([A-Z]{2})\b/g]) {
     for (const m of t.matchAll(re)) {
       if (!M.state_stats[m[2]]) continue;
       const city = findCity(m[2], m[1]);
-      if (city || re.source.includes("\\d{5}")) {
+      if (city || m[3]) {
         out.state = m[2]; out.city = city; out.cityRaw = m[1].trim().split(/\s+/).slice(-3).join(" ");
+        out.zip = m[3] || (new RegExp(String.raw`,\s*${m[2]}\s+(\d{5})\b`).exec(t) || [])[1] || null;
         break;
       }
     }
@@ -1572,8 +1583,9 @@ function runParse() {
   if (listingText && r.address) lines.push(`<div><strong>Address:</strong> ${esc(r.address)}</div>`);
   if (r.state) {
     $("state").value = r.state; fillCities(); fillCounties(); countyAuto = true;
+    zipHit = countyForZip(r.state, r.zip);
     $("city").value = r.city || r.cityRaw || "";
-    lines.push(`<div><strong>Location:</strong> ${esc(r.city || r.cityRaw || "city not found")}, ${esc(r.state)}</div>`);
+    lines.push(`<div><strong>Location:</strong> ${esc(r.city || r.cityRaw || "city not found")}, ${esc(r.state)}${r.zip ? ` ${esc(r.zip)}` : ""}${zipHit ? ` (${esc(zipHit.county)} County)` : ""}</div>`);
   } else kept.push("location");
 
   if (listingText && r.amenities.length) {
@@ -1639,7 +1651,7 @@ function runParse() {
 }
 
 const getJSON = p => fetch(p).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
-Promise.all([getJSON("model.json"), getJSON("rent_index.json"), getJSON("benchmarks.json"), getJSON("listings.json")])
-  .then(([m, r, t, l]) => { M = m; R = r; T = t; LS = l; setup(); })
+Promise.all([getJSON("model.json"), getJSON("rent_index.json"), getJSON("benchmarks.json"), getJSON("listings.json"), getJSON("zip_county.json")])
+  .then(([m, r, t, l, z]) => { M = m; R = r; T = t; LS = l; Z = z; setup(); })
   .catch(() => { $("load-error").hidden = false; });
 </script>
