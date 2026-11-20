@@ -17,7 +17,11 @@ AMEN = ['AC', 'Alarm', 'Basketball', 'Cable or Satellite', 'Clubhouse', 'Dishwas
         'Garbage Disposal', 'Gated', 'Golf', 'Gym', 'Hot Tub', 'Internet Access', 'Luxury', 'Parking', 'Patio/Deck',
         'Playground', 'Pool', 'Refrigerator', 'Storage', 'TV', 'Tennis', 'View', 'Washer Dryer', 'Wood Floors']
 
-df = pd.read_csv(CSV, low_memory=False)
+df = pd.read_csv(CSV, low_memory=False, dtype={'county_fips': str})
+df['county_fips'] = df.county_fips.str.replace(r'\.0$', '', regex=True).str.zfill(5)  # keep leading zeros: 01001, not 1001
+# the 5-digit county FIPS code is the identifier: one code per state and county name, and one name per code
+assert df.groupby('county_fips')[['state', 'county']].nunique().max().max() == 1
+assert df.groupby(['state', 'county']).county_fips.nunique().max() == 1
 df['log_square_feet'] = np.log(df['square_feet'])
 df['log_county_population_density'] = np.log(df['county_population_density_2019'])
 assert np.allclose(df['log_price'], np.log(df['price']))
@@ -111,6 +115,8 @@ model = {
     'segment_method': 'four market segments assigned by state in the team dataset',
     'segments': segments, 'amenities': AMEN, 'cities_by_state': cities_by_state, 'state_stats': state_stats,
     'counties': counties, 'city_county': city_county,
+    # county FIPS code -> [state, county name]; zip_county.json maps each ZIP code to one of these codes
+    'fips': {k: [r.state, r.county] for k, r in df.drop_duplicates('county_fips').set_index('county_fips').sort_index().iterrows()},
 }
 json.dump(model, open(f'{OUT}/model.json', 'w'), separators=(',', ':'))
 

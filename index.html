@@ -504,14 +504,14 @@ code { font-family: var(--font-mono); font-size: 12.5px; }
       <ul>
         <li><strong>Asking rents from 2018–2019.</strong> The model learned from asking rents posted between December 2018 and December 2019, about 94% of them on RentDigs.com. Asking rents can differ from what tenants finally sign for. The BLS adjustment assumes every unit in a region grew at the regional average, and because the index includes existing leases, it may understate increases on new listings.</li>
         <li><strong>Accuracy differs by market.</strong> Half of the actual rents were within 6.6% of the prediction in the Low segment, 5.6% in Medium-Low, 4.8% in Medium-High and 7.0% in High. States with few listings, such as New York (562), give less stable estimates.</li>
-        <li><strong>No neighbourhood detail.</strong> The model knows the state and the county, not the street, so two units with the same features in the same county get the same estimate, even if one is downtown and one is in a quiet suburb. The county comes from the listing's ZIP code. Without a ZIP code it comes from the city name, so a city that spans several counties gets the county with the most listings. The city comparison helps, but it can't capture differences between neighbourhoods.</li>
+        <li><strong>No neighbourhood detail.</strong> The model knows the state and the county, not the street, so two units with the same features in the same county get the same estimate, even if one is downtown and one is in a quiet suburb. The county comes from the listing's ZIP code: the ZIP code is converted to a 5-digit county FIPS code, and the FIPS code identifies the county. Each ZIP code is assigned the county that holds most of its land, so a ZIP code that crosses a county line gets only one county, and a very small independent city, such as Fairfax City in Virginia, is assigned to the surrounding county. Without a ZIP code it comes from the city name, so a city that spans several counties gets the county with the most listings. The city comparison helps, but it can't capture differences between neighbourhoods.</li>
         <li><strong>Building quality is mixed in.</strong> Gyms and extra bathrooms come mostly with newer, higher-end buildings, and the model can't separate the two. The page hides any amenity or bathroom amount above 5% of the estimate.</li>
         <li><strong>Listings can be misread.</strong> Listing sites format pages differently, so units, amenities or fees can be read wrongly. Check the filled-in form before relying on the result.</li>
       </ul>
     </details>
     <details>
       <summary>Updating the model</summary>
-      <p>Running <code>build.py</code> on the team's <code>apartments_segmented.csv</code> rebuilds <code>model.json</code> (segments, states, counties, scores and feature names), the comparison data and the compressed tree files <code>rf_high.txt</code>, <code>rf_medium_high.txt</code>, <code>rf_medium_low.txt</code> and <code>rf_low.txt</code>. Features follow the order scikit-learn's <code>get_feature_names_out()</code> gives them, such as <code>cats__state_TX</code> and <code>remainder__log_square_feet</code>, so a change to the notebook's features carries over when the files are rebuilt. <code>zip_county.py</code> builds <code>zip_county.json</code> from the US Census Bureau's 2020 ZIP code (ZCTA) to county file, giving each ZIP code the county that holds most of its land, so a pasted listing's ZIP code sets the county.</p>
+      <p>Running <code>build.py</code> on the team's <code>apartments_segmented.csv</code> rebuilds <code>model.json</code> (segments, states, counties, scores and feature names), the comparison data and the compressed tree files <code>rf_high.txt</code>, <code>rf_medium_high.txt</code>, <code>rf_medium_low.txt</code> and <code>rf_low.txt</code>. Features follow the order scikit-learn's <code>get_feature_names_out()</code> gives them, such as <code>cats__state_TX</code> and <code>remainder__log_square_feet</code>, so a change to the notebook's features carries over when the files are rebuilt. <code>zip_county.py</code> builds <code>zip_county.json</code> from the US Census Bureau's 2020 ZIP Code Tabulation Area (ZCTA) to county relationship file: each ZIP code is matched to the 5-digit county FIPS code of the county that holds most of its land, and <code>model.json</code> lists the state and county name for each FIPS code, so a pasted listing's ZIP code sets the county through its FIPS code.</p>
     </details>
   </div>
 </div>
@@ -588,12 +588,14 @@ function predict(inp) {
 }
 
 // the county comes from the pasted listing's ZIP code, then the city when the data has listings there, otherwise the state's county with the most listings
+// ZIP code -> 5-digit county FIPS code (Z.zip) -> state and county name (M.fips); the FIPS code is the identifier, so a county and an independent city with the same name can't be mixed up
 let countyAuto = true, zipHit = null;
 function countyForZip(s, zip) {
-  const i = zip ? Z.zip[zip] : undefined;
-  if (i === undefined) return null;
-  const [st, county] = Z.counties[i].split("|");
-  return st === s && M.counties[s][county] ? { state: s, county, zip } : null;
+  const fips = zip ? Z.zip[zip] : undefined;
+  const hit = fips ? M.fips[fips] : undefined;
+  if (!hit) return null;
+  const [st, county] = hit;
+  return st === s && M.counties[s][county] ? { state: s, county, zip, fips } : null;
 }
 const topCounty = s => Object.entries(M.counties[s]).sort((a, b) => b[1][2] - a[1][2])[0][0];
 function countyForCity(s, city) {
@@ -615,7 +617,7 @@ function syncCounty() {
     const fromCity = z ? null : countyForCity(s, city);
     $("county").value = z ? z.county : fromCity || topCounty(s);
     $("county-hint").textContent = z
-      ? `County filled in from ZIP code ${z.zip}. Change it if the unit is in a different county.`
+      ? `County filled in from ZIP code ${z.zip} (county FIPS ${z.fips}). Change it if the unit is in a different county.`
       : fromCity
       ? `County filled in from the city. Change it if the unit is in a different county.`
       : city.trim()
